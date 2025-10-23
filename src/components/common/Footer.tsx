@@ -1,20 +1,14 @@
-// src/components/common/Footer.tsx
 import React from 'react';
-import { Link } from 'react-router-dom'; // Need react-router-dom
-import { FOOTER_LINKS, SOCIAL_MEDIA_LINKS, APP_NAME, DUMMY_IMAGES } from '@utils/constants'; // Using aliases
-import { FaFacebookF, FaInstagram, FaTwitter } from 'react-icons/fa'; // From react-icons
+import { Link } from 'react-router-dom';
+import { FOOTER_LINKS, SOCIAL_MEDIA_LINKS, APP_NAME, DUMMY_IMAGES } from '@utils/constants';
+import { FaFacebookF, FaInstagram, FaTwitter } from 'react-icons/fa';
 
 const SocialIcon: React.FC<{ name: string; url: string }> = ({ name, url }) => {
-  let IconComponent;
-  switch (name) {
-    case 'Facebook': IconComponent = FaFacebookF; break;
-    case 'Instagram': IconComponent = FaInstagram; break;
-    case 'Twitter': IconComponent = FaTwitter; break;
-    default: return null;
-  }
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" aria-label={name}>
-      <IconComponent />
+      {name === 'Facebook' && <FaFacebookF className="footer-icon" size={20} />}
+      {name === 'Instagram' && <FaInstagram className="footer-icon" size={20} />}
+      {name === 'Twitter' && <FaTwitter className="footer-icon" size={20} />}
     </a>
   );
 };

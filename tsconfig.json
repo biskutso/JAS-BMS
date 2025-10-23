@@ -15,7 +15,6 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-
     "baseUrl": "./src",
     "paths": {
       "@assets/*": ["assets/*"],
@@ -29,5 +28,5 @@
     }
   },
   "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "exclude": ["node_modules", "dist", "vite.config.ts", "**/*.config.*"]
 }

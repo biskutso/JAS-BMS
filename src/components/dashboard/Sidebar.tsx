@@ -2,6 +2,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '@context/AuthContext';
+import { IconType } from 'react-icons';
 import {
   MdDashboard, MdPerson, MdCalendarToday, MdListAlt, MdStore,
   MdPeople, MdSettings, MdHistory, MdNotifications, MdReport, MdEventAvailable
@@ -10,7 +11,7 @@ import {
 interface NavItem {
   name: string;
   path: string;
-  icon: React.ElementType;
+  icon: IconType;
   roles: string[];
 }
 
