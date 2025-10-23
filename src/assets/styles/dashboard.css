@@ -1,0 +1,272 @@
+/* src/assets/styles/dashboard.css */
+
+/* --- Overall Dashboard Layout --- */
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh; /* Fixed: Remove the calc() with undefined variable */
+  z-index: -100;
+}
+
+.dashboard-content-area {
+  flex-grow: 1;
+  margin-left: 250px; /* Add this - crucial for sidebar spacing */
+  padding: var(--spacing-lg) var(--spacing-md);
+  background-color: #f9f9f9;
+  min-height: 100vh;
+}
+
+/* --- Sidebar Component --- */
+.sidebar {
+  width: 250px;
+  min-width: 200px;
+  background-color: var(--color-primary-dark);
+  color: var(--color-primary-light);
+  padding: var(--spacing-lg) var(--spacing-sm);
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  position: fixed; /* Add this - crucial for fixed sidebar */
+  left: 0;
+  top: 0;
+  height: 100vh; /* Full viewport height */
+  overflow-y: auto; /* Scroll if content is too long */
+  z-index: 1000; /* Ensure sidebar stays above content */
+}
+
+.sidebar h3 {
+  font-family: var(--font-family-serif);
+  font-size: 1.5rem;
+  text-align: center;
+  margin-bottom: var(--spacing-lg);
+  color: var(--color-accent);
+}
+
+.sidebar-nav ul {
+  list-style: none;
+  padding: 0;
+}
+
+.sidebar-nav li {
+  margin-bottom: var(--spacing-sm);
+}
+
+.sidebar-nav a {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--color-primary-light);
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  font-family: var(--font-family-sans-serif);
+  font-weight: 400;
+  font-size: 1rem;
+}
+
+.sidebar-nav a:hover {
+  background-color: rgba(var(--color-accent-rgb), 0.1); /* Use RGB for rgba */
+  color: var(--color-accent);
+}
+
+.sidebar-nav a.active {
+  background-color: var(--color-accent);
+  color: var(--color-primary-dark);
+  font-weight: 500;
+}
+.sidebar-nav a.active svg {
+  color: var(--color-primary-dark); /* Ensure icon also changes color */
+}
+
+/* For icon color in general */
+.sidebar-nav a svg {
+  font-size: 1.2rem;
+  color: var(--color-primary-light);
+  transition: color 0.2s ease;
+}
+
+/* Adjust RGB for accent color for rgba usage */
+:root {
+  /* ... existing colors ... */
+  --color-accent-rgb: 184, 134, 11; /* RGB for #b8860b */
+}
+
+
+/* --- Dashboard Header Component --- */
+.dashboard-header {
+  background-color: var(--color-background);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.dashboard-header h2 {
+  font-family: var(--font-family-serif);
+  font-size: 2rem;
+  color: var(--color-primary-dark);
+  margin: 0;
+}
+
+.dashboard-header-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.dashboard-header-actions .user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--color-accent);
+}
+
+/* --- Table Component --- */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--spacing-lg);
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  overflow: hidden; /* Ensures rounded corners */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+}
+
+.data-table thead {
+  background-color: var(--color-primary-dark);
+  color: var(--color-primary-light);
+}
+
+.data-table th {
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  font-family: var(--font-family-sans-serif);
+  font-weight: 500;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.data-table tbody tr {
+  border-bottom: 1px solid var(--color-border);
+  transition: background-color 0.2s ease;
+}
+
+.data-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.data-table tbody tr:hover {
+  background-color: #f5f5f5;
+}
+
+.data-table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-family: var(--font-family-sans-serif);
+  font-size: 0.95rem;
+  color: var(--color-primary-dark);
+}
+
+.data-table td .btn {
+  margin-right: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.8rem;
+}
+
+/* --- Responsive for Smaller Screens --- */
+@media (max-width: 900px) {
+  .dashboard-layout {
+    flex-direction: column; /* Stack sidebar and content */
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: unset;
+    height: auto;
+    padding: var(--spacing-md);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
+  .sidebar h3 {
+    text-align: left;
+    margin-bottom: var(--spacing-sm);
+  }
+  .sidebar-nav ul {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center; /* Center links in mobile sidebar */
+    gap: var(--spacing-sm);
+  }
+  .sidebar-nav li {
+    margin-bottom: 0;
+  }
+  .sidebar-nav a {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    flex-direction: column; /* Stack icon and text */
+    font-size: 0.8rem;
+    gap: 4px;
+  }
+  .sidebar-nav a svg {
+    font-size: 1rem;
+  }
+
+  .dashboard-content-area {
+    border-left: none;
+    padding: var(--spacing-md);
+  }
+
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+  .dashboard-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .dashboard-header h2 {
+    font-size: 1.8rem;
+  }
+
+  /* Tables on small screens */
+  .data-table, .data-table thead, .data-table tbody, .data-table th, .data-table td, .data-table tr {
+    display: block;
+  }
+
+  .data-table thead tr {
+    position: absolute;
+    top: -9999px;
+    left: -9999px;
+  }
+
+  .data-table tr {
+    border: 1px solid var(--color-border);
+    margin-bottom: var(--spacing-sm);
+    border-radius: var(--border-radius-md);
+  }
+
+  .data-table td {
+    border: none;
+    border-bottom: 1px solid #eee;
+    position: relative;
+    padding-left: 50%; /* Space for the label */
+    text-align: right;
+  }
+
+  .data-table td:before {
+    position: absolute;
+    top: 50%;
+    left: var(--spacing-sm);
+    width: 45%;
+    padding-right: var(--spacing-sm);
+    white-space: nowrap;
+    content: attr(data-label); /* Use data-label attribute for headers */
+    font-weight: bold;
+    text-align: left;
+    transform: translateY(-50%);
+    color: var(--color-text-light);
+  }
+}

@@ -1,0 +1,205 @@
+/* src/assets/styles/globals.css */
+
+/* Font Imports (Placeholder - link to actual font files or Google Fonts later) */
+/*
+   For real fonts, you would typically link to Google Fonts in index.html
+   or use actual .ttf files. For now, this is a placeholder.
+   Example Google Fonts import (could go in index.html or here):
+   @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&family=Playfair+Display:wght@400;700&display=swap');
+*/
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('../fonts/PlayfairDisplay-Regular.ttf') format('truetype'); /* Ensure you have this file */
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Montserrat';
+  src: url('../fonts/Montserrat-Regular.ttf') format('truetype'); /* Ensure you have this file */
+  font-weight: 400;
+  font-style: normal;
+}
+
+
+:root {
+  /* Color Palette */
+  --color-primary-light: #fefefe; /* Near white */
+  --color-primary-dark: #222222; /* Charcoal */
+  --color-text-light: #555555; /* Mid-grey for subtle text */
+  --color-accent: #b8860b; /* Muted Gold (example) */
+  --color-background: #ffffff;
+  --color-border: #e0e0e0;
+
+  /* Typography */
+  --font-family-serif: 'Playfair Display', serif;
+  --font-family-sans-serif: 'Montserrat', sans-serif;
+  --font-size-base: 16px;
+
+  /* Spacing */
+  --spacing-xs: 8px;
+  --spacing-sm: 16px;
+  --spacing-md: 24px;
+  --spacing-lg: 48px;
+  --spacing-xl: 96px;
+
+  /* Border Radius */
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+
+  /* Z-index */
+  --z-index-header: 100;
+  --z-index-modal: 1000;
+}
+
+/* Global Resets */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: var(--font-size-base);
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-family-sans-serif);
+  color: var(--color-primary-dark);
+  background-color: var(--color-background);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Minimalist Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-family-serif);
+  font-weight: 400; /* Playfair Display is often elegant at regular weight */
+  margin-bottom: var(--spacing-sm);
+}
+
+h1 { font-size: 3.5rem; } /* ~56px */
+h2 { font-size: 2.5rem; } /* ~40px */
+h3 { font-size: 1.8rem; } /* ~29px */
+h4 { font-size: 1.4rem; } /* ~22px */
+h5 { font-size: 1.2rem; } /* ~19px */
+h6 { font-size: 1rem; }   /* ~16px */
+
+p {
+  margin-bottom: var(--spacing-sm);
+}
+
+/* Add these styles to your main CSS file */
+.contact-form {
+  width: 100%;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #333;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.3s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.form-row {
+  display: flex;
+  gap: 15px;
+}
+
+.form-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+/* File upload styling */
+.file-upload-area {
+  border: 2px dashed #ddd;
+  padding: 20px;
+  text-align: center;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  transition: border-color 0.3s ease;
+}
+
+.file-upload-area:hover {
+  border-color: #007bff;
+}
+
+.file-upload-label {
+  cursor: pointer;
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  border-radius: 4px;
+  transition: background-color 0.3s ease;
+}
+
+.file-upload-label:hover {
+  background-color: #0056b3;
+}
+
+.file-upload-label:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.password-input-container {
+  position: relative;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666;
+  padding: 4px;
+}
+
+.password-toggle-btn:hover {
+  color: #333;
+}
+
+.password-input {
+  padding-right: 40px !important;
+}
