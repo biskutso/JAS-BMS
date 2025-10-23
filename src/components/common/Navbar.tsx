@@ -1,88 +1,116 @@
+// src/components/common/Navbar.tsx
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '@context/AuthContext';
-import { APP_NAME, DUMMY_IMAGES } from '@utils/constants';
+import { Link, NavLink, useNavigate } from 'react-router-dom'; // Need react-router-dom
+import { NAV_LINKS, DUMMY_IMAGES, APP_NAME } from '@utils/constants'; // Using aliases
+import Button from './Button'; // Using alias
+import { useAuth } from '@context/AuthContext'; // Using alias
+import { GiHamburgerMenu } from 'react-icons/gi'; // For hamburger icon
+import { IoCloseSharp } from 'react-icons/io5'; // For close icon
 
 const Navbar: React.FC = () => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/');
+    setIsMobileMenuOpen(false); // Close menu on logout
   };
 
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
+  const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
   return (
     <nav className="navbar">
-      <div className="nav-container">
-        <Link to="/" className="nav-logo">
-          <img src={DUMMY_IMAGES.LOGO} alt={APP_NAME} className="logo" />
-          <span>{APP_NAME}</span>
-        </Link>
+      <Link to="/">
+        <img src={DUMMY_IMAGES.LOGO} alt={APP_NAME} className="navbar-logo" />
+      </Link>
 
-        <div className="nav-menu">
-          <Link to="/" className="nav-link">Home</Link>
-          <Link to="/services" className="nav-link">Services</Link>
-          <Link to="/about" className="nav-link">About</Link>
-          <Link to="/contact" className="nav-link">Contact</Link>
-        </div>
+      <ul className="nav-links">
+        {NAV_LINKS.map((link) => (
+          (link.name !== "Login" || !isAuthenticated) && ( // Hide Login if authenticated
+            <li key={link.name} className="nav-link">
+              <NavLink
+                to={link.path}
+                className={({ isActive }) => (isActive ? 'active' : '')}
+              >
+                {link.name}
+              </NavLink>
+            </li>
+          )
+        ))}
+        {isAuthenticated && (
+          <li className="nav-link">
+            <NavLink
+              to={`/${user?.role}/dashboard`}
+              className={({ isActive }) => (isActive ? 'active' : '')}
+            >
+              Dashboard
+            </NavLink>
+          </li>
+        )}
+      </ul>
 
-        <div className="nav-actions">
-          {user ? (
-            <>
-              <span className="welcome-message">Hello, {user?.first_name}</span>
-              <button onClick={handleLogout} className="logout-btn">
-                Logout
-              </button>
-              <Link to={`/${user.role}/dashboard`} className="dashboard-btn">
-                Dashboard
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link to="/login" className="login-btn">Login</Link>
-              <Link to="/register" className="register-btn">Register</Link>
-            </>
-          )}
-        </div>
-
-        <button className="mobile-menu-btn" onClick={toggleMobileMenu}>
-          {isMobileMenuOpen ? '✕' : '☰'}
-        </button>
+      <div className="navbar-auth-links">
+        {!isAuthenticated ? (
+          <>
+            <Button variant="secondary" size="small" onClick={() => navigate('/login')}>Login</Button>
+            <Button variant="primary" size="small" onClick={() => navigate('/signup')}>Sign Up</Button>
+          </>
+        ) : (
+          <>
+            <span className="welcome-message">Hello, {user?.first_name}</span>
+            <Button variant="secondary" size="small" onClick={handleLogout}>Logout</Button>
+          </>
+        )}
       </div>
 
-      {isMobileMenuOpen && (
-        <div className="mobile-menu">
-          <Link to="/" className="mobile-nav-link" onClick={toggleMobileMenu}>Home</Link>
-          <Link to="/services" className="mobile-nav-link" onClick={toggleMobileMenu}>Services</Link>
-          <Link to="/about" className="mobile-nav-link" onClick={toggleMobileMenu}>About</Link>
-          <Link to="/contact" className="mobile-nav-link" onClick={toggleMobileMenu}>Contact</Link>
-          
-          {user ? (
-            <>
-              <span className="welcome-message" style={{ color: 'var(--color-primary-light)', padding: '0.75rem 0' }}>
-                Hello, {user?.first_name}
-              </span>
-              <Link to={`/${user.role}/dashboard`} className="mobile-nav-link" onClick={toggleMobileMenu}>
+      <button className="hamburger-menu" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="Toggle navigation">
+        {isMobileMenuOpen ? <IoCloseSharp /> : <GiHamburgerMenu />}
+      </button>
+
+      {/* Mobile Navigation Overlay */}
+      <div className={`mobile-nav-overlay ${isMobileMenuOpen ? 'open' : ''}`}>
+        <ul className="nav-links">
+          {NAV_LINKS.map((link) => (
+            (link.name !== "Login" || !isAuthenticated) && (
+              <li key={link.name} className="nav-link">
+                <NavLink
+                  to={link.path}
+                  onClick={closeMobileMenu}
+                  className={({ isActive }) => (isActive ? 'active' : '')}
+                >
+                  {link.name}
+                </NavLink>
+              </li>
+            )
+          ))}
+          {isAuthenticated && (
+            <li className="nav-link">
+              <NavLink
+                to={`/${user?.role}/dashboard`}
+                onClick={closeMobileMenu}
+                className={({ isActive }) => (isActive ? 'active' : '')}
+              >
                 Dashboard
-              </Link>
-              <button onClick={() => { handleLogout(); toggleMobileMenu(); }} className="mobile-logout-btn">
-                Logout
-              </button>
+              </NavLink>
+            </li>
+          )}
+        </ul>
+        <div className="navbar-auth-links">
+          {!isAuthenticated ? (
+            <>
+              <Button variant="secondary" size="small" onClick={() => { navigate('/login'); closeMobileMenu(); }}>Login</Button>
+              <Button variant="primary" size="small" onClick={() => { navigate('/signup'); closeMobileMenu(); }}>Sign Up</Button>
             </>
           ) : (
             <>
-              <Link to="/login" className="mobile-nav-link" onClick={toggleMobileMenu}>Login</Link>
-              <Link to="/register" className="mobile-nav-link" onClick={toggleMobileMenu}>Register</Link>
+              <span className="welcome-message" style={{ color: 'var(--color-primary-light)' }}>Hello, {user?.first_name}</span>
+              <Button variant="secondary" size="small" onClick={handleLogout}>Logout</Button>
             </>
           )}
         </div>
-      )}
+      </div>
     </nav>
   );
 };
