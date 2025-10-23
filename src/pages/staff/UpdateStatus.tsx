@@ -33,7 +33,62 @@ const UpdateStatus: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Fetch staff bookings from Supabase
+  // FIXED: Safe customer details fetch with fallback
+  const fetchCustomerDetails = async (customerIds: string[]) => {
+    try {
+      console.log('🔄 Fetching customer details for IDs:', customerIds);
+      
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, first_name, last_name, email')
+        .in('id', customerIds);
+
+      if (error) {
+        console.error('❌ Error fetching customer details:', error);
+        // Return fallback data
+        return customerIds.map(id => ({
+          id,
+          first_name: 'Customer',
+          last_name: '',
+          email: 'unknown@example.com',
+          phone: 'Unknown'
+        }));
+      }
+
+      console.log('✅ Customer details fetched:', data);
+
+      // If no data found, return fallback
+      if (!data || data.length === 0) {
+        return customerIds.map(id => ({
+          id,
+          first_name: 'Customer',
+          last_name: '',
+          email: 'unknown@example.com',
+          phone: 'Unknown'
+        }));
+      }
+
+      return data.map(user => ({
+        id: user.id,
+        first_name: user.first_name || 'Customer',
+        last_name: user.last_name || '',
+        email: user.email || 'unknown@example.com',
+        phone: 'Unknown' // Your users table doesn't have phone column
+      }));
+
+    } catch (err) {
+      console.error('❌ Error in fetchCustomerDetails:', err);
+      return customerIds.map(id => ({
+        id,
+        first_name: 'Customer',
+        last_name: '',
+        email: 'unknown@example.com',
+        phone: 'Unknown'
+      }));
+    }
+  };
+
+  // Fetch staff bookings from Supabase - FIXED: Using correct table structure
   const fetchStaffBookings = async () => {
     try {
       setBookingsLoading(true);
@@ -46,7 +101,7 @@ const UpdateStatus: React.FC = () => {
 
       console.log('🔄 Fetching bookings for staff:', user.id);
 
-      // Simple query to get bookings for this staff member
+      // Get bookings for this staff member
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
@@ -65,17 +120,22 @@ const UpdateStatus: React.FC = () => {
       if (data && data.length > 0) {
         // Fetch service details
         const serviceIds = [...new Set(data.map(booking => booking.service_id))];
-        const { data: servicesData } = await supabase
+        console.log('🔄 Fetching services for IDs:', serviceIds);
+        
+        const { data: servicesData, error: servicesError } = await supabase
           .from('services')
           .select('*')
           .in('id', serviceIds);
 
-        // Fetch customer details
+        if (servicesError) {
+          console.error('❌ Error fetching services:', servicesError);
+        }
+
+        console.log('✅ Services fetched:', servicesData);
+
+        // Fetch customer details with the new safe function
         const customerIds = [...new Set(data.map(booking => booking.customer_id))];
-        const { data: customersData } = await supabase
-          .from('users')
-          .select('id, first_name, last_name, email, phone')
-          .in('id', customerIds);
+        const customersData = await fetchCustomerDetails(customerIds);
 
         // Transform data
         const staffBookings: BookingWithRelations[] = data.map(booking => {
@@ -93,7 +153,7 @@ const UpdateStatus: React.FC = () => {
             customerName: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
             customer_name: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
             customer_email: customer?.email || '',
-            customer_phone: customer?.phone || '',
+            customer_phone: customer?.phone || 'Unknown',
             staffId: booking.staff_id,
             staffName: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
             staff_name: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
@@ -230,11 +290,9 @@ const UpdateStatus: React.FC = () => {
       render: (item: BookingWithRelations) => (
         <div>
           <div style={{ fontWeight: '500' }}>{item.customer_name}</div>
-          {item.customer_phone && (
-            <div style={{ fontSize: '0.875rem', color: '#666' }}>
-              📞 {item.customer_phone}
-            </div>
-          )}
+          <div style={{ fontSize: '0.875rem', color: '#666' }}>
+            ✉️ {item.customer_email}
+          </div>
         </div>
       )
     },

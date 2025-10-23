@@ -27,7 +27,62 @@ const CheckSchedule: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch staff bookings from Supabase
+  // FIXED: Safe customer details fetch with fallback
+  const fetchCustomerDetails = async (customerIds: string[]) => {
+    try {
+      console.log('🔄 Fetching customer details for IDs:', customerIds);
+      
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, first_name, last_name, email')
+        .in('id', customerIds);
+
+      if (error) {
+        console.error('❌ Error fetching customer details:', error);
+        // Return fallback data
+        return customerIds.map(id => ({
+          id,
+          first_name: 'Customer',
+          last_name: '',
+          email: 'unknown@example.com',
+          phone: 'Unknown'
+        }));
+      }
+
+      console.log('✅ Customer details fetched:', data);
+
+      // If no data found, return fallback
+      if (!data || data.length === 0) {
+        return customerIds.map(id => ({
+          id,
+          first_name: 'Customer',
+          last_name: '',
+          email: 'unknown@example.com',
+          phone: 'Unknown'
+        }));
+      }
+
+      return data.map(user => ({
+        id: user.id,
+        first_name: user.first_name || 'Customer',
+        last_name: user.last_name || '',
+        email: user.email || 'unknown@example.com',
+        phone: 'Unknown' // Your users table doesn't have phone column
+      }));
+
+    } catch (err) {
+      console.error('❌ Error in fetchCustomerDetails:', err);
+      return customerIds.map(id => ({
+        id,
+        first_name: 'Customer',
+        last_name: '',
+        email: 'unknown@example.com',
+        phone: 'Unknown'
+      }));
+    }
+  };
+
+  // Fetch staff bookings from Supabase - FIXED: Using correct table structure
   const fetchStaffBookings = async () => {
     try {
       setLoading(true);
@@ -40,27 +95,27 @@ const CheckSchedule: React.FC = () => {
 
       console.log('🔄 Fetching bookings for staff:', user.id, 'on date:', selectedDate);
 
-      // First, let's check if we can fetch basic bookings data
-      let query = supabase
+      // Get bookings for this staff member
+      const { data, error } = await supabase
         .from('bookings')
         .select('*')
         .eq('staff_id', user.id)
         .eq('booking_date', selectedDate)
         .order('booking_time', { ascending: true });
 
-      const { data: basicData, error: basicError } = await query;
-
-      if (basicError) {
-        console.error('❌ Error fetching basic bookings:', basicError);
-        throw basicError;
+      if (error) {
+        console.error('❌ Error fetching staff bookings:', error);
+        throw error;
       }
 
-      console.log('✅ Basic bookings fetched:', basicData);
+      console.log('✅ Staff bookings fetched:', data);
 
-      // If we have bookings, try to fetch related data
-      if (basicData && basicData.length > 0) {
+      // If we have bookings, fetch related data
+      if (data && data.length > 0) {
         // Fetch service details
-        const serviceIds = [...new Set(basicData.map(booking => booking.service_id))];
+        const serviceIds = [...new Set(data.map(booking => booking.service_id))];
+        console.log('🔄 Fetching services for IDs:', serviceIds);
+        
         const { data: servicesData, error: servicesError } = await supabase
           .from('services')
           .select('*')
@@ -70,19 +125,14 @@ const CheckSchedule: React.FC = () => {
           console.error('❌ Error fetching services:', servicesError);
         }
 
-        // Fetch customer details
-        const customerIds = [...new Set(basicData.map(booking => booking.customer_id))];
-        const { data: customersData, error: customersError } = await supabase
-          .from('users')
-          .select('id, first_name, last_name, email, phone')
-          .in('id', customerIds);
+        console.log('✅ Services fetched:', servicesData);
 
-        if (customersError) {
-          console.error('❌ Error fetching customers:', customersError);
-        }
+        // Fetch customer details with the new safe function
+        const customerIds = [...new Set(data.map(booking => booking.customer_id))];
+        const customersData = await fetchCustomerDetails(customerIds);
 
         // Transform data to match BookingWithRelations interface
-        const staffBookings: BookingWithRelations[] = basicData.map(booking => {
+        const staffBookings: BookingWithRelations[] = data.map(booking => {
           const service = servicesData?.find(s => s.id === booking.service_id);
           const customer = customersData?.find(c => c.id === booking.customer_id);
           
@@ -97,7 +147,7 @@ const CheckSchedule: React.FC = () => {
             customerName: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
             customer_name: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
             customer_email: customer?.email || '',
-            customer_phone: customer?.phone || '',
+            customer_phone: customer?.phone || 'Unknown',
             staffId: booking.staff_id,
             staffName: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
             staff_name: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
@@ -133,7 +183,7 @@ const CheckSchedule: React.FC = () => {
     }
   };
 
-  // Alternative simpler fetch method
+  // Alternative simpler fetch method - FIXED: Using safe customer data
   const fetchStaffBookingsSimple = async () => {
     try {
       setLoading(true);
@@ -161,32 +211,52 @@ const CheckSchedule: React.FC = () => {
 
       console.log('✅ Simple bookings fetched:', data);
 
-      // Transform the simple data
-      const staffBookings: BookingWithRelations[] = (data || []).map(booking => ({
-        id: booking.id,
-        serviceId: booking.service_id,
-        serviceName: 'Service', // Placeholder
-        service_name: 'Service', // Placeholder
-        service_price: booking.total_price || 0,
-        service_duration: 60, // Default duration
-        customerId: booking.customer_id,
-        customerName: 'Customer', // Placeholder
-        customer_name: 'Customer', // Placeholder
-        customer_email: '',
-        customer_phone: '',
-        staffId: booking.staff_id,
-        staffName: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
-        staff_name: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
-        startTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
-        endTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
-        booking_date: booking.booking_date,
-        booking_time: booking.booking_time,
-        status: booking.status as BookingStatus,
-        price: booking.total_price || 0,
-        notes: booking.notes || ''
-      }));
+      // If we have data, fetch customer details properly
+      if (data && data.length > 0) {
+        const customerIds = [...new Set(data.map(booking => booking.customer_id))];
+        const customersData = await fetchCustomerDetails(customerIds);
 
-      setBookings(staffBookings);
+        // Fetch service details
+        const serviceIds = [...new Set(data.map(booking => booking.service_id))];
+        const { data: servicesData } = await supabase
+          .from('services')
+          .select('*')
+          .in('id', serviceIds);
+
+        // Transform the data with proper customer info
+        const staffBookings: BookingWithRelations[] = data.map(booking => {
+          const service = servicesData?.find(s => s.id === booking.service_id);
+          const customer = customersData?.find(c => c.id === booking.customer_id);
+
+          return {
+            id: booking.id,
+            serviceId: booking.service_id,
+            serviceName: service?.service_name || 'Service',
+            service_name: service?.service_name || 'Service',
+            service_price: service?.price || booking.total_price || 0,
+            service_duration: service?.duration || 60,
+            customerId: booking.customer_id,
+            customerName: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Customer',
+            customer_name: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Customer',
+            customer_email: customer?.email || '',
+            customer_phone: customer?.phone || 'Unknown',
+            staffId: booking.staff_id,
+            staffName: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
+            staff_name: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
+            startTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
+            endTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
+            booking_date: booking.booking_date,
+            booking_time: booking.booking_time,
+            status: booking.status as BookingStatus,
+            price: booking.total_price || service?.price || 0,
+            notes: booking.notes || ''
+          };
+        });
+
+        setBookings(staffBookings);
+      } else {
+        setBookings([]);
+      }
 
     } catch (err: any) {
       console.error('❌ Simple fetch failed:', err);
@@ -279,16 +349,9 @@ const CheckSchedule: React.FC = () => {
       render: (item: BookingWithRelations) => (
         <div>
           <div style={{ fontWeight: '500' }}>{item.customer_name}</div>
-          {item.customer_phone && (
-            <div style={{ fontSize: '0.875rem', color: '#666' }}>
-              📞 {item.customer_phone}
-            </div>
-          )}
-          {item.customer_email && (
-            <div style={{ fontSize: '0.875rem', color: '#666' }}>
-              ✉️ {item.customer_email}
-            </div>
-          )}
+          <div style={{ fontSize: '0.875rem', color: '#666' }}>
+            ✉️ {item.customer_email}
+          </div>
         </div>
       )
     },

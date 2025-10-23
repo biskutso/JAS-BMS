@@ -27,7 +27,62 @@ const StaffDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch staff bookings from Supabase
+  // Fetch customer details - FIXED: Using correct table structure
+  const fetchCustomerDetails = async (customerIds: string[]) => {
+    try {
+      console.log('🔄 Fetching customer details for IDs:', customerIds);
+      
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, first_name, last_name, email')
+        .in('id', customerIds);
+
+      if (error) {
+        console.error('❌ Error fetching customer details:', error);
+        // Return fallback data
+        return customerIds.map(id => ({
+          id,
+          first_name: 'Customer',
+          last_name: '',
+          email: 'unknown@example.com',
+          phone: 'Unknown'
+        }));
+      }
+
+      console.log('✅ Customer details fetched:', data);
+
+      // If no data found, return fallback
+      if (!data || data.length === 0) {
+        return customerIds.map(id => ({
+          id,
+          first_name: 'Customer',
+          last_name: '',
+          email: 'unknown@example.com',
+          phone: 'Unknown'
+        }));
+      }
+
+      return data.map(user => ({
+        id: user.id,
+        first_name: user.first_name || 'Customer',
+        last_name: user.last_name || '',
+        email: user.email || 'unknown@example.com',
+        phone: 'Unknown' // Your users table doesn't have phone column
+      }));
+
+    } catch (err) {
+      console.error('❌ Error in fetchCustomerDetails:', err);
+      return customerIds.map(id => ({
+        id,
+        first_name: 'Customer',
+        last_name: '',
+        email: 'unknown@example.com',
+        phone: 'Unknown'
+      }));
+    }
+  };
+
+  // Fetch staff bookings from Supabase - FIXED: Using correct table structure
   const fetchStaffBookings = async () => {
     try {
       setLoading(true);
@@ -40,7 +95,7 @@ const StaffDashboard: React.FC = () => {
 
       console.log('🔄 Fetching bookings for staff:', user.id);
 
-      // Simple query to get bookings for this staff member
+      // Get bookings for this staff member
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
@@ -59,17 +114,22 @@ const StaffDashboard: React.FC = () => {
       if (data && data.length > 0) {
         // Fetch service details
         const serviceIds = [...new Set(data.map(booking => booking.service_id))];
-        const { data: servicesData } = await supabase
+        console.log('🔄 Fetching services for IDs:', serviceIds);
+        
+        const { data: servicesData, error: servicesError } = await supabase
           .from('services')
           .select('*')
           .in('id', serviceIds);
 
+        if (servicesError) {
+          console.error('❌ Error fetching services:', servicesError);
+        }
+
+        console.log('✅ Services fetched:', servicesData);
+
         // Fetch customer details
         const customerIds = [...new Set(data.map(booking => booking.customer_id))];
-        const { data: customersData } = await supabase
-          .from('users')
-          .select('id, first_name, last_name, email, phone')
-          .in('id', customerIds);
+        const customersData = await fetchCustomerDetails(customerIds);
 
         // Transform data
         const staffBookings: BookingWithRelations[] = data.map(booking => {
@@ -87,7 +147,7 @@ const StaffDashboard: React.FC = () => {
             customerName: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
             customer_name: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
             customer_email: customer?.email || '',
-            customer_phone: customer?.phone || '',
+            customer_phone: customer?.phone || 'Unknown', // Your users table doesn't have phone
             staffId: booking.staff_id,
             staffName: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
             staff_name: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
@@ -147,11 +207,9 @@ const StaffDashboard: React.FC = () => {
       render: (item: BookingWithRelations) => (
         <div>
           <div style={{ fontWeight: '500' }}>{item.customer_name}</div>
-          {item.customer_phone && (
-            <div style={{ fontSize: '0.875rem', color: '#666' }}>
-              📞 {item.customer_phone}
-            </div>
-          )}
+          <div style={{ fontSize: '0.875rem', color: '#666' }}>
+            ✉️ {item.customer_email}
+          </div>
         </div>
       )
     },
@@ -215,7 +273,7 @@ const StaffDashboard: React.FC = () => {
 
   return (
     <>
-      <DashboardHeader title={`Welcome, ${user?.first_name}!`} />
+      <DashboardHeader title={`Welcome, ${user?.first_name || 'Staff'}!`} />
       <div className="page-container">
         {/* Error Message */}
         {error && (
