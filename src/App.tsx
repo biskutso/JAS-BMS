@@ -40,6 +40,22 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => {
+
+// Change favicon
+    const setFavicon = (url: string) => {
+      const link: HTMLLinkElement = document.querySelector("link[rel*='icon']") || document.createElement('link');
+      link.type = 'image/x-icon';
+      link.rel = 'shortcut icon';
+      link.href = url;
+      document.getElementsByTagName('head')[0].appendChild(link);
+    };
+
+    // Change title
+    document.title = 'Joyce Aesthetic Salon & Spa';
+    
+    // Set favicon
+    setFavicon('/logo.png');
+
   return (
     <Router>
       <AppContent />

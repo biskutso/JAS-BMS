@@ -1,11 +1,14 @@
 // src/components/common/Navbar.tsx
 import React, { useState } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom'; // Need react-router-dom
-import { NAV_LINKS, DUMMY_IMAGES, APP_NAME } from '@utils/constants'; // Using aliases
-import Button from './Button'; // Using alias
-import { useAuth } from '@context/AuthContext'; // Using alias
-import { GiHamburgerMenu } from 'react-icons/gi'; // For hamburger icon
-import { IoCloseSharp } from 'react-icons/io5'; // For close icon
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { NAV_LINKS, APP_NAME } from '@utils/constants';
+import Button from './Button';
+import { useAuth } from '@context/AuthContext';
+import { GiHamburgerMenu } from 'react-icons/gi';
+import { IoCloseSharp } from 'react-icons/io5';
+
+// Import logo from assets
+const Logo = '/assets/images/logo.png'; // Direct path to public folder
 
 const Navbar: React.FC = () => {
   const { isAuthenticated, user, logout } = useAuth();
@@ -15,7 +18,7 @@ const Navbar: React.FC = () => {
   const handleLogout = () => {
     logout();
     navigate('/');
-    setIsMobileMenuOpen(false); // Close menu on logout
+    setIsMobileMenuOpen(false);
   };
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
@@ -23,12 +26,12 @@ const Navbar: React.FC = () => {
   return (
     <nav className="navbar">
       <Link to="/">
-        <img src={DUMMY_IMAGES.LOGO} alt={APP_NAME} className="navbar-logo" />
+        <img src={Logo} alt={APP_NAME} className="navbar-logo" />
       </Link>
 
       <ul className="nav-links">
         {NAV_LINKS.map((link) => (
-          (link.name !== "Login" || !isAuthenticated) && ( // Hide Login if authenticated
+          (link.name !== "Login" || !isAuthenticated) && (
             <li key={link.name} className="nav-link">
               <NavLink
                 to={link.path}

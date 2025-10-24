@@ -10,7 +10,7 @@ interface HeroSectionProps {
 const HeroSection: React.FC<HeroSectionProps> = ({
   title = 'Joyce Aesthetic Salon & Spa',
   subtitle = 'Experience unparalleled beauty and tranquility.',
-  backgroundImage = '/src/assets/images/hero-woman.jpg',
+  backgroundImage = '/assets/images/hero-woman.jpg',
 }) => {
   return (
     <section className="hero-section">

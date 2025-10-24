@@ -22,13 +22,18 @@ export const SOCIAL_MEDIA_LINKS = [
   { name: "Twitter", url: "https://twitter.com/joycespa" },
 ];
 
+
+export const getImagePath = (imageName: string): string => {
+  return `/assets/images/${imageName}`;
+};
+
 // Dummy Images (replace with actual paths or CDN URLs)
 export const DUMMY_IMAGES = {
-  HERO_WOMAN: '/src/assets/images/hero-woman.jpg',
-  SERVICE_MASSAGE: '/src/assets/images/service-massage.jpg',
-  SERVICE_FACIAL: '/src/assets/images/service-facial.jpg',
-  SERVICE_MANICURE: '/src/assets/images/service-manicure.jpg',
-  LOGO: '/src/assets/images/logo.png',
-  CLIENT_AVATAR: '/src/assets/images/client-avatar.jpg',
-  LOCATION_MAP: '/src/assets/images/location-map.png',
-};
+  HERO_WOMAN: getImagePath('hero-woman.jpg'),
+  SERVICE_MASSAGE: getImagePath('service-massage.jpg'),
+  SERVICE_FACIAL: getImagePath('service-facial.jpg'),
+  SERVICE_MANICURE: getImagePath('service-manicure.jpg'),
+  LOGO: getImagePath('logo.png'),
+  CLIENT_AVATAR: getImagePath('client-avatar.jpg'),
+  LOCATION_MAP: getImagePath('location-map.png'),
+} as const;
