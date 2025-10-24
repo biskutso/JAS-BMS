@@ -89,7 +89,7 @@ const Services: React.FC = () => {
       <HeroSection
         title="Our Luxurious Services"
         subtitle="Experience relaxation and rejuvenation with our range of professional treatments."
-        backgroundImage="/src/assets/images/hero-woman.jpg"
+        backgroundImage="/assets/images/hero-woman.jpg"
       />
       
       {/* Services Section */}
