@@ -43,6 +43,11 @@ const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper function to filter out null values from arrays
+  const filterNullIds = (ids: (string | null)[]): string[] => {
+    return ids.filter((id): id is string => id !== null && id !== undefined);
+  };
+
   // Fetch dashboard data
   const fetchDashboardData = async () => {
     try {
@@ -68,25 +73,37 @@ const AdminDashboard: React.FC = () => {
       // If we have bookings, try to fetch related data
       if (bookingsData && bookingsData.length > 0) {
         // Fetch service details
-        const serviceIds = [...new Set(bookingsData.map(booking => booking.service_id))];
-        const { data: servicesData } = await supabase
-          .from('services')
-          .select('*')
-          .in('id', serviceIds);
+        const serviceIds = filterNullIds([...new Set(bookingsData.map(booking => booking.service_id))]);
+        let servicesData: any[] = [];
+        if (serviceIds.length > 0) {
+          const { data: services } = await supabase
+            .from('services')
+            .select('*')
+            .in('id', serviceIds);
+          servicesData = services || [];
+        }
 
         // Fetch customer details
-        const customerIds = [...new Set(bookingsData.map(booking => booking.customer_id))];
-        const { data: customersData } = await supabase
-          .from('users')
-          .select('id, first_name, last_name, email')
-          .in('id', customerIds);
+        const customerIds = filterNullIds([...new Set(bookingsData.map(booking => booking.customer_id))]);
+        let customersData: any[] = [];
+        if (customerIds.length > 0) {
+          const { data: customers } = await supabase
+            .from('users')
+            .select('id, first_name, last_name, email')
+            .in('id', customerIds);
+          customersData = customers || [];
+        }
 
-        // Fetch staff details
-        const staffIds = [...new Set(bookingsData.map(booking => booking.staff_id))];
-        const { data: staffData } = await supabase
-          .from('users')
-          .select('id, first_name, last_name')
-          .in('id', staffIds);
+        // Fetch staff details - only if there are non-null staff IDs
+        const staffIds = filterNullIds([...new Set(bookingsData.map(booking => booking.staff_id))]);
+        let staffData: any[] = [];
+        if (staffIds.length > 0) {
+          const { data: staff } = await supabase
+            .from('users')
+            .select('id, first_name, last_name')
+            .in('id', staffIds);
+          staffData = staff || [];
+        }
 
         // Transform bookings data
         const transformedBookings: BookingWithRelations[] = bookingsData.map(booking => {
@@ -208,7 +225,7 @@ const AdminDashboard: React.FC = () => {
             .not('staff_id', 'is', null);
 
           if (bookingsData) {
-            const uniqueStaffIds = [...new Set(bookingsData.map(b => b.staff_id))];
+            const uniqueStaffIds = filterNullIds([...new Set(bookingsData.map(b => b.staff_id))]);
             newStats.activeStaff = uniqueStaffIds.length;
           }
         } catch (fallbackErr) {

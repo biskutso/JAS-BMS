@@ -34,6 +34,7 @@ const CancelReschedule: React.FC = () => {
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
   // Fetch customer bookings from Supabase
   const fetchCustomerBookings = async () => {
@@ -117,15 +118,15 @@ const CancelReschedule: React.FC = () => {
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedBooking.id)
-        .eq('customer_id', user.id); // Ensure customer can only cancel their own bookings
+        .eq('customer_id', user.id);
 
       if (error) throw error;
 
       setSuccess('Booking cancelled successfully!');
-      await fetchCustomerBookings(); // Refresh the list
+      await fetchCustomerBookings();
     } catch (err: any) {
       console.error('Cancellation error:', err);
-      setError(err.message || 'Failed to cancel booking.');
+      setError('Failed to cancel booking. Please try again.');
     } finally {
       setLoading(false);
       closeCancelModal();
@@ -134,9 +135,9 @@ const CancelReschedule: React.FC = () => {
 
   const handleRescheduleClick = (booking: BookingWithRelations) => {
     setSelectedBooking(booking);
-    // Pre-fill reschedule form with current date/time
     setRescheduleDate(booking.booking_date || '');
     setRescheduleTime(booking.booking_time || '');
+    setRescheduleError(null);
     openRescheduleModal();
   };
 
@@ -151,7 +152,6 @@ const CancelReschedule: React.FC = () => {
         .eq('staff_id', staffId)
         .in('status', ['pending', 'confirmed']);
 
-      // Exclude the current booking if rescheduling
       if (excludeBookingId) {
         query = query.neq('id', excludeBookingId);
       }
@@ -160,24 +160,68 @@ const CancelReschedule: React.FC = () => {
 
       if (error) throw error;
 
-      // If no bookings found at this time for this staff, it's available
       return data.length === 0;
     } catch (err) {
       console.error('Error checking time slot:', err);
-      return true; // Default to available if check fails
+      return true;
     }
+  };
+
+  // Get available time slots for rescheduling
+  const getAvailableTimeSlots = () => {
+    const slots = [];
+    const startHour = 9;
+    const endHour = 18;
+    
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    const isToday = rescheduleDate === now.toISOString().split('T')[0];
+    
+    for (let hour = startHour; hour < endHour; hour++) {
+      if (!isToday || hour > currentHour || (hour === currentHour && currentMinute < 30)) {
+        slots.push(`${hour.toString().padStart(2, '0')}:00`);
+      }
+      
+      if (hour < endHour - 1) {
+        if (!isToday || hour > currentHour || (hour === currentHour && currentMinute <= 30)) {
+          slots.push(`${hour.toString().padStart(2, '0')}:30`);
+        }
+      }
+    }
+    
+    return slots;
+  };
+
+  const handleRescheduleDateChange = (date: string) => {
+    setRescheduleDate(date);
+    setRescheduleError(null);
+    
+    if (date && rescheduleTime) {
+      const timeSlots = getAvailableTimeSlots();
+      if (!timeSlots.includes(rescheduleTime)) {
+        setRescheduleTime('');
+      }
+    }
+  };
+
+  const handleRescheduleTimeChange = (time: string) => {
+    setRescheduleTime(time);
+    setRescheduleError(null);
   };
 
   const handleConfirmReschedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBooking || !rescheduleDate || !rescheduleTime || !user) {
-      setError('Please provide a new date and time.');
+      setRescheduleError('Please provide a new date and time.');
       return;
     }
 
     setLoading(true);
     setError(null);
     setSuccess(null);
+    setRescheduleError(null);
 
     try {
       // Check if the new time slot is available
@@ -186,56 +230,50 @@ const CancelReschedule: React.FC = () => {
           rescheduleDate, 
           rescheduleTime, 
           selectedBooking.staffId,
-          selectedBooking.id // Exclude current booking
+          selectedBooking.id
         );
         
         if (!isAvailable) {
-          setError('This time slot is no longer available. Please choose another time.');
+          setRescheduleError('This time slot is no longer available. Please choose another time.');
           setLoading(false);
           return;
         }
       }
 
       // Update booking in Supabase
-      const updateData = {
-        booking_date: rescheduleDate,
-        booking_time: rescheduleTime,
-        status: 'pending', // Change status to pending when rescheduled
-        updated_at: new Date().toISOString()
-      };
-
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('bookings')
-        .update(updateData)
+        .update({ 
+          booking_date: rescheduleDate,
+          booking_time: rescheduleTime,
+          status: 'pending',
+          updated_at: new Date().toISOString()
+        })
         .eq('id', selectedBooking.id)
-        .eq('customer_id', user.id); // Ensure customer can only update their own bookings
+        .eq('customer_id', user.id)
+        .select();
 
       if (error) throw error;
 
-      setSuccess('Booking rescheduled successfully! Status changed to pending for admin approval.');
-      await fetchCustomerBookings(); // Refresh the list
+      if (data && data.length === 0) {
+        throw new Error('No records were updated. Please try again.');
+      }
+
+      setSuccess('Booking rescheduled successfully! Status changed to pending for approval.');
+      await fetchCustomerBookings();
+      
+      // Close modal and reset only on success
+      closeRescheduleModal();
+      setRescheduleDate('');
+      setRescheduleTime('');
+      setSelectedBooking(null);
+      
     } catch (err: any) {
       console.error('Reschedule error:', err);
-      setError(err.message || 'Failed to reschedule booking.');
+      setRescheduleError('Failed to reschedule booking. Please try again.');
     } finally {
       setLoading(false);
-      closeRescheduleModal();
     }
-  };
-
-  // Get available time slots for rescheduling
-  const getAvailableTimeSlots = () => {
-    const slots = [];
-    const startHour = 9; // 9 AM
-    const endHour = 18; // 6 PM
-    
-    for (let hour = startHour; hour < endHour; hour++) {
-      slots.push(`${hour.toString().padStart(2, '0')}:00`);
-      if (hour < endHour - 1) {
-        slots.push(`${hour.toString().padStart(2, '0')}:30`);
-      }
-    }
-    return slots;
   };
 
   const formatDateTime = (date: string, time: string) => {
@@ -392,6 +430,16 @@ const CancelReschedule: React.FC = () => {
             <p style={{marginBottom: 'var(--spacing-md)'}}>
               Reschedule <strong>{selectedBooking.service_name}</strong> currently on <strong>{formatDateTime(selectedBooking.booking_date, selectedBooking.booking_time)}</strong>.
             </p>
+            <p style={{ 
+              backgroundColor: '#fff3e0', 
+              padding: '12px', 
+              borderRadius: '4px', 
+              marginBottom: '16px',
+              fontSize: '14px',
+              border: '1px solid #ffb74d'
+            }}>
+              <strong>Note:</strong> After rescheduling, your booking status will change to <strong>pending</strong> and will require admin approval.
+            </p>
             <form onSubmit={handleConfirmReschedule} className="contact-form">
               <div className="form-group">
                 <label htmlFor="reschedule-date">New Date *</label>
@@ -399,7 +447,7 @@ const CancelReschedule: React.FC = () => {
                   type="date"
                   id="reschedule-date"
                   value={rescheduleDate}
-                  onChange={(e) => setRescheduleDate(e.target.value)}
+                  onChange={(e) => handleRescheduleDateChange(e.target.value)}
                   required
                   min={new Date().toISOString().split('T')[0]}
                   max={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
@@ -411,10 +459,13 @@ const CancelReschedule: React.FC = () => {
                 <select
                   id="reschedule-time"
                   value={rescheduleTime}
-                  onChange={(e) => setRescheduleTime(e.target.value)}
+                  onChange={(e) => handleRescheduleTimeChange(e.target.value)}
                   required
+                  disabled={!rescheduleDate}
                 >
-                  <option value="">Select a time</option>
+                  <option value="">
+                    -- {rescheduleDate ? 'Select a Time' : 'Select a date first'} --
+                  </option>
                   {getAvailableTimeSlots().map(time => (
                     <option key={time} value={time}>
                       {parseInt(time.split(':')[0]) >= 12 
@@ -425,11 +476,19 @@ const CancelReschedule: React.FC = () => {
                   ))}
                 </select>
                 <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
-                  Business hours: 9:00 AM - 6:00 PM
+                  {rescheduleDate === new Date().toISOString().split('T')[0] 
+                    ? `Today's available time slots (current time: ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')})`
+                    : 'Business hours: 9:00 AM - 6:00 PM'
+                  }
                 </small>
+                {rescheduleDate && getAvailableTimeSlots().length === 0 && (
+                  <small style={{ color: '#d32f2f', marginTop: '4px', display: 'block' }}>
+                    No available time slots for the selected date. Please choose another date.
+                  </small>
+                )}
               </div>
 
-              {error && (
+              {rescheduleError && (
                 <div style={{
                   backgroundColor: '#fee',
                   border: '1px solid #f5c6cb',
@@ -438,7 +497,7 @@ const CancelReschedule: React.FC = () => {
                   borderRadius: '4px',
                   marginBottom: '16px'
                 }}>
-                  {error}
+                  {rescheduleError}
                 </div>
               )}
 

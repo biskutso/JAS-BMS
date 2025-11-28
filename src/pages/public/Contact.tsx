@@ -1,16 +1,19 @@
 // src/pages/public/Contact.tsx
 import React from 'react';
-import ContactForm from '@components/public/ContactForm'; // Using alias
-import { APP_NAME } from '@utils/constants'; // Using alias
+import ContactForm from '@components/public/ContactForm';
+import { APP_NAME } from '@utils/constants';
 
 const Contact: React.FC = () => {
   return (
     <div className="page-container">
-      <h1 className="page-title">Contact Us</h1>
-      <p className="section-subtitle">
-        Have a question or want to schedule an appointment? We'd love to hear from you.
-        Fill out the form below or reach us directly.
-      </p>
+      <div className="section-header">
+        <h1 className="page-title">Contact Us</h1>
+        <p className="section-subtitle">
+          Have a question or want to schedule an appointment? We'd love to hear from you.
+          Fill out the form below or reach us directly.
+        </p>
+      </div>
+      
       <ContactForm />
       <div style={{ textAlign: 'center', marginTop: 'var(--spacing-lg)' }}>
         <p><strong>Phone:</strong> (123) 456-7890</p>

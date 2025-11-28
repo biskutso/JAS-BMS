@@ -9,6 +9,7 @@ import { Booking, BookingStatus } from '@models/booking';
 import { formatCurrency, formatDate } from '@utils/helpers';
 import { useAuth } from '@context/AuthContext';
 import { supabase } from '../../supabaseClient';
+import { SupabaseNotificationService } from '../../services/supabaseNotificationService';
 
 interface BookingWithRelations extends Booking {
   service_name: string;
@@ -33,19 +34,16 @@ const UpdateStatus: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // FIXED: Safe customer details fetch with fallback
+  // Safe customer details fetch with fallback
   const fetchCustomerDetails = async (customerIds: string[]) => {
     try {
-      console.log('🔄 Fetching customer details for IDs:', customerIds);
-      
       const { data, error } = await supabase
         .from('users')
         .select('id, first_name, last_name, email')
         .in('id', customerIds);
 
       if (error) {
-        console.error('❌ Error fetching customer details:', error);
-        // Return fallback data
+        console.error('Error fetching customer details:', error);
         return customerIds.map(id => ({
           id,
           first_name: 'Customer',
@@ -55,9 +53,6 @@ const UpdateStatus: React.FC = () => {
         }));
       }
 
-      console.log('✅ Customer details fetched:', data);
-
-      // If no data found, return fallback
       if (!data || data.length === 0) {
         return customerIds.map(id => ({
           id,
@@ -73,11 +68,11 @@ const UpdateStatus: React.FC = () => {
         first_name: user.first_name || 'Customer',
         last_name: user.last_name || '',
         email: user.email || 'unknown@example.com',
-        phone: 'Unknown' // Your users table doesn't have phone column
+        phone: 'Unknown'
       }));
 
     } catch (err) {
-      console.error('❌ Error in fetchCustomerDetails:', err);
+      console.error('Error in fetchCustomerDetails:', err);
       return customerIds.map(id => ({
         id,
         first_name: 'Customer',
@@ -88,7 +83,7 @@ const UpdateStatus: React.FC = () => {
     }
   };
 
-  // Fetch staff bookings from Supabase - FIXED: Using correct table structure
+  // Fetch staff bookings from Supabase
   const fetchStaffBookings = async () => {
     try {
       setBookingsLoading(true);
@@ -99,8 +94,6 @@ const UpdateStatus: React.FC = () => {
         return;
       }
 
-      console.log('🔄 Fetching bookings for staff:', user.id);
-
       // Get bookings for this staff member
       const { data, error } = await supabase
         .from('bookings')
@@ -110,17 +103,14 @@ const UpdateStatus: React.FC = () => {
         .order('booking_time', { ascending: true });
 
       if (error) {
-        console.error('❌ Error fetching staff bookings:', error);
+        console.error('Error fetching staff bookings:', error);
         throw error;
       }
-
-      console.log('✅ Staff bookings fetched:', data);
 
       // If we have bookings, fetch related data
       if (data && data.length > 0) {
         // Fetch service details
         const serviceIds = [...new Set(data.map(booking => booking.service_id))];
-        console.log('🔄 Fetching services for IDs:', serviceIds);
         
         const { data: servicesData, error: servicesError } = await supabase
           .from('services')
@@ -128,12 +118,10 @@ const UpdateStatus: React.FC = () => {
           .in('id', serviceIds);
 
         if (servicesError) {
-          console.error('❌ Error fetching services:', servicesError);
+          console.error('Error fetching services:', servicesError);
         }
 
-        console.log('✅ Services fetched:', servicesData);
-
-        // Fetch customer details with the new safe function
+        // Fetch customer details
         const customerIds = [...new Set(data.map(booking => booking.customer_id))];
         const customersData = await fetchCustomerDetails(customerIds);
 
@@ -173,7 +161,7 @@ const UpdateStatus: React.FC = () => {
       }
 
     } catch (err: any) {
-      console.error('❌ Error fetching staff bookings:', err);
+      console.error('Error fetching staff bookings:', err);
       setError('Failed to load your appointments. Please try again.');
     } finally {
       setBookingsLoading(false);
@@ -207,11 +195,33 @@ const UpdateStatus: React.FC = () => {
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedBooking.id)
-        .eq('staff_id', user.id); // Ensure staff can only update their own bookings
+        .eq('staff_id', user.id);
 
       if (error) throw error;
 
-      setSuccess(`Booking status updated to ${newStatus} successfully!`);
+      // ✅ NOTIFICATION TRIGGERS - With error handling
+      let notificationSent = false;
+      try {
+        if (newStatus === 'confirmed') {
+          await SupabaseNotificationService.createBookingNotification(selectedBooking.id, 'booking_confirmed');
+          notificationSent = true;
+        } else if (newStatus === 'completed') {
+          await SupabaseNotificationService.createBookingNotification(selectedBooking.id, 'booking_completed');
+          notificationSent = true;
+        } else if (newStatus === 'cancelled') {
+          await SupabaseNotificationService.createBookingNotification(selectedBooking.id, 'booking_cancelled');
+          notificationSent = true;
+        }
+      } catch (notificationError) {
+        console.error('Notification failed, but booking was updated:', notificationError);
+        // Continue even if notification fails
+      }
+
+      const successMessage = notificationSent 
+        ? `Booking status updated to ${newStatus} successfully! Notification sent to customer.`
+        : `Booking status updated to ${newStatus} successfully!`;
+
+      setSuccess(successMessage);
       
       // Refresh the bookings list
       await fetchStaffBookings();
@@ -221,7 +231,7 @@ const UpdateStatus: React.FC = () => {
         closeModal();
       }, 2000);
     } catch (err: any) {
-      console.error('❌ Status update error:', err);
+      console.error('Status update error:', err);
       setError(err.message || 'Failed to update booking status.');
     } finally {
       setLoading(false);
@@ -364,7 +374,7 @@ const UpdateStatus: React.FC = () => {
     },
   ];
 
-  // Filter bookings to show only active ones (not completed or cancelled)
+  // Filter bookings to show only active ones
   const activeBookings = bookings.filter(booking => 
     booking.status === 'pending' || booking.status === 'confirmed'
   );

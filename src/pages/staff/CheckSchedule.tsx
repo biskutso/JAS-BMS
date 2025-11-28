@@ -7,6 +7,7 @@ import { Booking, BookingStatus } from '@models/booking';
 import { formatCurrency, formatDate } from '@utils/helpers';
 import { useAuth } from '@context/AuthContext';
 import { supabase } from '../../supabaseClient';
+import { SupabaseNotificationService } from '../../services/supabaseNotificationService';
 
 interface BookingWithRelations extends Booking {
   service_name: string;
@@ -26,20 +27,18 @@ const CheckSchedule: React.FC = () => {
   const [bookings, setBookings] = useState<BookingWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  // FIXED: Safe customer details fetch with fallback
+  // Safe customer details fetch with fallback
   const fetchCustomerDetails = async (customerIds: string[]) => {
     try {
-      console.log('🔄 Fetching customer details for IDs:', customerIds);
-      
       const { data, error } = await supabase
         .from('users')
         .select('id, first_name, last_name, email')
         .in('id', customerIds);
 
       if (error) {
-        console.error('❌ Error fetching customer details:', error);
-        // Return fallback data
+        console.error('Error fetching customer details:', error);
         return customerIds.map(id => ({
           id,
           first_name: 'Customer',
@@ -49,9 +48,6 @@ const CheckSchedule: React.FC = () => {
         }));
       }
 
-      console.log('✅ Customer details fetched:', data);
-
-      // If no data found, return fallback
       if (!data || data.length === 0) {
         return customerIds.map(id => ({
           id,
@@ -67,11 +63,11 @@ const CheckSchedule: React.FC = () => {
         first_name: user.first_name || 'Customer',
         last_name: user.last_name || '',
         email: user.email || 'unknown@example.com',
-        phone: 'Unknown' // Your users table doesn't have phone column
+        phone: 'Unknown'
       }));
 
     } catch (err) {
-      console.error('❌ Error in fetchCustomerDetails:', err);
+      console.error('Error in fetchCustomerDetails:', err);
       return customerIds.map(id => ({
         id,
         first_name: 'Customer',
@@ -82,108 +78,7 @@ const CheckSchedule: React.FC = () => {
     }
   };
 
-  // Fetch staff bookings from Supabase - FIXED: Using correct table structure
-  const fetchStaffBookings = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      if (!user) {
-        setError('Please log in to view your schedule.');
-        return;
-      }
-
-      console.log('🔄 Fetching bookings for staff:', user.id, 'on date:', selectedDate);
-
-      // Get bookings for this staff member
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('staff_id', user.id)
-        .eq('booking_date', selectedDate)
-        .order('booking_time', { ascending: true });
-
-      if (error) {
-        console.error('❌ Error fetching staff bookings:', error);
-        throw error;
-      }
-
-      console.log('✅ Staff bookings fetched:', data);
-
-      // If we have bookings, fetch related data
-      if (data && data.length > 0) {
-        // Fetch service details
-        const serviceIds = [...new Set(data.map(booking => booking.service_id))];
-        console.log('🔄 Fetching services for IDs:', serviceIds);
-        
-        const { data: servicesData, error: servicesError } = await supabase
-          .from('services')
-          .select('*')
-          .in('id', serviceIds);
-
-        if (servicesError) {
-          console.error('❌ Error fetching services:', servicesError);
-        }
-
-        console.log('✅ Services fetched:', servicesData);
-
-        // Fetch customer details with the new safe function
-        const customerIds = [...new Set(data.map(booking => booking.customer_id))];
-        const customersData = await fetchCustomerDetails(customerIds);
-
-        // Transform data to match BookingWithRelations interface
-        const staffBookings: BookingWithRelations[] = data.map(booking => {
-          const service = servicesData?.find(s => s.id === booking.service_id);
-          const customer = customersData?.find(c => c.id === booking.customer_id);
-          
-          return {
-            id: booking.id,
-            serviceId: booking.service_id,
-            serviceName: service?.service_name || 'Unknown Service',
-            service_name: service?.service_name || 'Unknown Service',
-            service_price: service?.price || 0,
-            service_duration: service?.duration || 60,
-            customerId: booking.customer_id,
-            customerName: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
-            customer_name: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
-            customer_email: customer?.email || '',
-            customer_phone: customer?.phone || 'Unknown',
-            staffId: booking.staff_id,
-            staffName: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
-            staff_name: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
-            startTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
-            endTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
-            booking_date: booking.booking_date,
-            booking_time: booking.booking_time,
-            status: booking.status as BookingStatus,
-            price: booking.total_price || service?.price || 0,
-            notes: booking.notes || ''
-          };
-        });
-
-        setBookings(staffBookings);
-      } else {
-        // No bookings found
-        setBookings([]);
-      }
-
-    } catch (err: any) {
-      console.error('❌ Error fetching staff bookings:', err);
-      
-      // Provide more specific error messages
-      if (err.message?.includes('JWT')) {
-        setError('Authentication error. Please log in again.');
-      } else if (err.message?.includes('foreign key')) {
-        setError('Database relationship error. Please contact support.');
-      } else {
-        setError('Failed to load your schedule. Please try again.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Alternative simpler fetch method - FIXED: Using safe customer data
+  // Fetch staff bookings from Supabase
   const fetchStaffBookingsSimple = async () => {
     try {
       setLoading(true);
@@ -194,8 +89,6 @@ const CheckSchedule: React.FC = () => {
         return;
       }
 
-      console.log('🔄 Simple fetch for staff:', user.id, 'on date:', selectedDate);
-
       // Simple query without complex joins
       const { data, error } = await supabase
         .from('bookings')
@@ -205,11 +98,9 @@ const CheckSchedule: React.FC = () => {
         .order('booking_time', { ascending: true });
 
       if (error) {
-        console.error('❌ Simple fetch error:', error);
+        console.error('Simple fetch error:', error);
         throw error;
       }
-
-      console.log('✅ Simple bookings fetched:', data);
 
       // If we have data, fetch customer details properly
       if (data && data.length > 0) {
@@ -259,7 +150,7 @@ const CheckSchedule: React.FC = () => {
       }
 
     } catch (err: any) {
-      console.error('❌ Simple fetch failed:', err);
+      console.error('Simple fetch failed:', err);
       setError('Unable to load schedule data. Please check your connection.');
     } finally {
       setLoading(false);
@@ -267,7 +158,6 @@ const CheckSchedule: React.FC = () => {
   };
 
   useEffect(() => {
-    // Try the simple fetch first
     fetchStaffBookingsSimple();
   }, [user, selectedDate]);
 
@@ -275,6 +165,7 @@ const CheckSchedule: React.FC = () => {
   const updateBookingStatus = async (bookingId: string, newStatus: BookingStatus) => {
     try {
       setError(null);
+      setSuccess(null);
       
       const { error } = await supabase
         .from('bookings')
@@ -287,10 +178,35 @@ const CheckSchedule: React.FC = () => {
 
       if (error) throw error;
 
+      // ✅ NOTIFICATION TRIGGERS - With error handling
+      let notificationSent = false;
+      try {
+        if (newStatus === 'confirmed') {
+          await SupabaseNotificationService.createBookingNotification(bookingId, 'booking_confirmed');
+          notificationSent = true;
+        } else if (newStatus === 'completed') {
+          await SupabaseNotificationService.createBookingNotification(bookingId, 'booking_completed');
+          notificationSent = true;
+        } else if (newStatus === 'cancelled') {
+          await SupabaseNotificationService.createBookingNotification(bookingId, 'booking_cancelled');
+          notificationSent = true;
+        }
+      } catch (notificationError) {
+        console.error('Notification failed, but booking was updated:', notificationError);
+        // Continue even if notification fails
+      }
+
       // Refresh the bookings list
       await fetchStaffBookingsSimple();
+      
+      // Show success message
+      const successMessage = notificationSent
+        ? `Booking status updated to ${newStatus}! Customer notified.`
+        : `Booking status updated to ${newStatus}!`;
+
+      setSuccess(successMessage);
     } catch (err: any) {
-      console.error('❌ Error updating booking status:', err);
+      console.error('Error updating booking status:', err);
       setError('Failed to update booking status. Please try again.');
     }
   };
@@ -463,18 +379,22 @@ const CheckSchedule: React.FC = () => {
           >
             {loading ? 'Refreshing...' : 'Refresh'}
           </Button>
-          <Button 
-            variant="text" 
-            size="small"
-            onClick={() => {
-              console.log('Debug: Current user:', user);
-              console.log('Debug: Current bookings:', bookings);
-            }}
-            style={{ fontSize: '12px' }}
-          >
-            Debug
-          </Button>
         </div>
+
+        {/* SUCCESS MESSAGE*/}
+        {success && (
+          <div style={{
+            backgroundColor: '#e8f5e8',
+            border: '1px solid #c8e6c9',
+            color: '#2e7d32',
+            padding: '12px',
+            borderRadius: '4px',
+            marginBottom: '16px',
+            textAlign: 'center'
+          }}>
+            {success}
+          </div>
+        )}
 
         {/* Error Message */}
         {error && (

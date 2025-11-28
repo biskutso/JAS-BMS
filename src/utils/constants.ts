@@ -7,7 +7,7 @@ export const NAV_LINKS = [
   { name: "Home", path: "/" },
   { name: "Services", path: "/services" },
   { name: "Contact", path: "/contact" },
-  { name: "Login", path: "/login" },
+  { name: "Dashboard", path: "/login" },
 ];
 
 export const FOOTER_LINKS = [

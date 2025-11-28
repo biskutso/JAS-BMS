@@ -168,6 +168,50 @@ const CustomerDashboard: React.FC = () => {
     }
   };
 
+  // Get available time slots for rescheduling based on whether it's today or future date
+  const getAvailableTimeSlots = () => {
+    const slots = [];
+    const startHour = 9; // 9 AM
+    const endHour = 18; // 6 PM
+    
+    // Get current time
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    // Check if reschedule date is today
+    const isToday = rescheduleDate === now.toISOString().split('T')[0];
+    
+    for (let hour = startHour; hour < endHour; hour++) {
+      // For 00 minute slot
+      if (!isToday || hour > currentHour || (hour === currentHour && currentMinute < 30)) {
+        slots.push(`${hour.toString().padStart(2, '0')}:00`);
+      }
+      
+      // For 30 minute slot (except for the last hour)
+      if (hour < endHour - 1) {
+        if (!isToday || hour > currentHour || (hour === currentHour && currentMinute <= 30)) {
+          slots.push(`${hour.toString().padStart(2, '0')}:30`);
+        }
+      }
+    }
+    
+    return slots;
+  };
+
+  // Handle reschedule date change - reset time if needed
+  const handleRescheduleDateChange = (date: string) => {
+    setRescheduleDate(date);
+    
+    // If the selected time is no longer valid for the new date, reset it
+    if (date && rescheduleTime) {
+      const timeSlots = getAvailableTimeSlots();
+      if (!timeSlots.includes(rescheduleTime)) {
+        setRescheduleTime('');
+      }
+    }
+  };
+
   const handleConfirmReschedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBooking || !rescheduleDate || !rescheduleTime || !user) {
@@ -198,7 +242,7 @@ const CustomerDashboard: React.FC = () => {
       const updateData = {
         booking_date: rescheduleDate,
         booking_time: rescheduleTime,
-        status: 'pending',
+        status: 'pending', // Change status to pending when rescheduled
         updated_at: new Date().toISOString()
       };
 
@@ -210,7 +254,7 @@ const CustomerDashboard: React.FC = () => {
 
       if (error) throw error;
 
-      setSuccess('Booking rescheduled successfully! Status changed to pending for admin approval.');
+      setSuccess('Booking rescheduled successfully! Status changed to pending for approval.');
       await fetchCustomerBookings();
     } catch (err: any) {
       console.error('Reschedule error:', err);
@@ -219,21 +263,6 @@ const CustomerDashboard: React.FC = () => {
       setLoading(false);
       closeRescheduleModal();
     }
-  };
-
-  // Get available time slots for rescheduling
-  const getAvailableTimeSlots = () => {
-    const slots = [];
-    const startHour = 9;
-    const endHour = 18;
-    
-    for (let hour = startHour; hour < endHour; hour++) {
-      slots.push(`${hour.toString().padStart(2, '0')}:00`);
-      if (hour < endHour - 1) {
-        slots.push(`${hour.toString().padStart(2, '0')}:30`);
-      }
-    }
-    return slots;
   };
 
   const formatDateTime = (date: string, time: string) => {
@@ -518,6 +547,16 @@ const CustomerDashboard: React.FC = () => {
             <p style={{marginBottom: 'var(--spacing-md)'}}>
               Reschedule <strong>{selectedBooking.service_name}</strong> currently on <strong>{formatDateTime(selectedBooking.booking_date, selectedBooking.booking_time)}</strong>.
             </p>
+            <p style={{ 
+              backgroundColor: '#fff3e0', 
+              padding: '12px', 
+              borderRadius: '4px', 
+              marginBottom: '16px',
+              fontSize: '14px',
+              border: '1px solid #ffb74d'
+            }}>
+              <strong>Note:</strong> After rescheduling, your booking status will change to <strong>pending</strong> and will require admin approval.
+            </p>
             <form onSubmit={handleConfirmReschedule} className="contact-form">
               <div className="form-group">
                 <label htmlFor="reschedule-date">New Date *</label>
@@ -525,7 +564,7 @@ const CustomerDashboard: React.FC = () => {
                   type="date"
                   id="reschedule-date"
                   value={rescheduleDate}
-                  onChange={(e) => setRescheduleDate(e.target.value)}
+                  onChange={(e) => handleRescheduleDateChange(e.target.value)}
                   required
                   min={new Date().toISOString().split('T')[0]}
                   max={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
@@ -539,8 +578,11 @@ const CustomerDashboard: React.FC = () => {
                   value={rescheduleTime}
                   onChange={(e) => setRescheduleTime(e.target.value)}
                   required
+                  disabled={!rescheduleDate}
                 >
-                  <option value="">Select a time</option>
+                  <option value="">
+                    -- {rescheduleDate ? 'Select a Time' : 'Select a date first'} --
+                  </option>
                   {getAvailableTimeSlots().map(time => (
                     <option key={time} value={time}>
                       {parseInt(time.split(':')[0]) >= 12 
@@ -551,8 +593,16 @@ const CustomerDashboard: React.FC = () => {
                   ))}
                 </select>
                 <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
-                  Business hours: 9:00 AM - 6:00 PM
+                  {rescheduleDate === new Date().toISOString().split('T')[0] 
+                    ? `Today's available time slots (current time: ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')})`
+                    : 'Business hours: 9:00 AM - 6:00 PM'
+                  }
                 </small>
+                {rescheduleDate && getAvailableTimeSlots().length === 0 && (
+                  <small style={{ color: '#d32f2f', marginTop: '4px', display: 'block' }}>
+                    No available time slots for the selected date. Please choose another date.
+                  </small>
+                )}
               </div>
 
               {error && (

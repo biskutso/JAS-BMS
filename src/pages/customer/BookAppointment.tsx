@@ -149,18 +149,34 @@ const BookAppointment: React.FC = () => {
     }
   }, [preselectedService, services, servicesLoading]);
 
-  // Get available time slots (you can customize this based on business hours)
+  // Get available time slots based on whether it's today or future date
   const getAvailableTimeSlots = () => {
     const slots = [];
     const startHour = 9; // 9 AM
     const endHour = 18; // 6 PM
     
+    // Get current time
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    // Check if selected date is today
+    const isToday = selectedDate === now.toISOString().split('T')[0];
+    
     for (let hour = startHour; hour < endHour; hour++) {
-      slots.push(`${hour.toString().padStart(2, '0')}:00`);
+      // For 00 minute slot
+      if (!isToday || hour > currentHour || (hour === currentHour && currentMinute < 30)) {
+        slots.push(`${hour.toString().padStart(2, '0')}:00`);
+      }
+      
+      // For 30 minute slot (except for the last hour)
       if (hour < endHour - 1) {
-        slots.push(`${hour.toString().padStart(2, '0')}:30`);
+        if (!isToday || hour > currentHour || (hour === currentHour && currentMinute <= 30)) {
+          slots.push(`${hour.toString().padStart(2, '0')}:30`);
+        }
       }
     }
+    
     return slots;
   };
 
@@ -202,6 +218,19 @@ const BookAppointment: React.FC = () => {
     setSelectedServiceId(serviceId);
     // Reset staff selection when service changes
     setSelectedStaffId('');
+  };
+
+  // Handle date change - reset time if needed
+  const handleDateChange = (date: string) => {
+    setSelectedDate(date);
+    
+    // If the selected time is no longer valid for the new date, reset it
+    if (date && selectedTime) {
+      const timeSlots = getAvailableTimeSlots();
+      if (!timeSlots.includes(selectedTime)) {
+        setSelectedTime('');
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -302,6 +331,7 @@ const BookAppointment: React.FC = () => {
   const selectedService = services.find(s => s.id === selectedServiceId);
   const selectedStaff = staffMembers.find(s => s.id === selectedStaffId);
   const specializedStaff = getSpecializedStaff(selectedService?.category || '');
+  const availableTimeSlots = getAvailableTimeSlots();
 
   return (
     <>
@@ -445,7 +475,7 @@ const BookAppointment: React.FC = () => {
                   type="date"
                   id="date"
                   value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
+                  onChange={(e) => handleDateChange(e.target.value)}
                   required
                   min={new Date().toISOString().split('T')[0]} // Prevent past dates
                   max={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]} // 30 days in future
@@ -460,9 +490,12 @@ const BookAppointment: React.FC = () => {
                   value={selectedTime}
                   onChange={(e) => setSelectedTime(e.target.value)}
                   required
+                  disabled={!selectedDate}
                 >
-                  <option value="">-- Select a Time --</option>
-                  {getAvailableTimeSlots().map(time => (
+                  <option value="">
+                    -- {selectedDate ? 'Select a Time' : 'Select a date first'} --
+                  </option>
+                  {availableTimeSlots.map(time => (
                     <option key={time} value={time}>
                       {parseInt(time.split(':')[0]) >= 12 
                         ? `${time} PM` 
@@ -472,8 +505,16 @@ const BookAppointment: React.FC = () => {
                   ))}
                 </select>
                 <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
-                  Business hours: 9:00 AM - 6:00 PM
+                  {selectedDate === new Date().toISOString().split('T')[0] 
+                    ? `Today's available time slots (current time: ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')})`
+                    : 'Business hours: 9:00 AM - 6:00 PM'
+                  }
                 </small>
+                {selectedDate && availableTimeSlots.length === 0 && (
+                  <small style={{ color: '#d32f2f', marginTop: '4px', display: 'block' }}>
+                    No available time slots for the selected date. Please choose another date.
+                  </small>
+                )}
               </div>
 
               {/* Notes */}

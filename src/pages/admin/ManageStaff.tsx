@@ -30,7 +30,6 @@ interface StaffMember {
   firstName: string;
   lastName: string;
   role: UserRole;
-  status: 'active' | 'inactive';
   created_at: string;
 }
 
@@ -43,7 +42,6 @@ const ManageStaff: React.FC = () => {
     firstName: '', 
     lastName: '', 
     password: '',
-    status: 'active' as 'active' | 'inactive',
     role: 'staff' as UserRole
   });
   const [loading, setLoading] = useState(false);
@@ -80,7 +78,6 @@ const ManageStaff: React.FC = () => {
         firstName: user.first_name || 'Unknown',
         lastName: user.last_name || 'User',
         role: (user.role as UserRole) || 'staff',
-        status: 'active',
         created_at: user.created_at
       }));
 
@@ -100,7 +97,6 @@ const ManageStaff: React.FC = () => {
     password: string;
     firstName: string;
     lastName: string;
-    status: 'active' | 'inactive';
     role: UserRole;
   }) => {
     try {
@@ -236,7 +232,6 @@ const ManageStaff: React.FC = () => {
       firstName: staff.firstName, 
       lastName: staff.lastName, 
       password: '',
-      status: staff.status,
       role: staff.role
     });
     setShowPassword(false);
@@ -250,7 +245,6 @@ const ManageStaff: React.FC = () => {
       firstName: '', 
       lastName: '', 
       password: '', 
-      status: 'active',
       role: 'staff'
     });
     setShowPassword(false);
@@ -294,7 +288,6 @@ const ManageStaff: React.FC = () => {
           password: formData.password,
           firstName: formData.firstName,
           lastName: formData.lastName,
-          status: formData.status,
           role: formData.role
         });
         setSuccessMessage('User created successfully');
@@ -348,22 +341,6 @@ const ManageStaff: React.FC = () => {
                 item.role === 'staff' ? '#2e7d32' : '#666'
         }}>
           {capitalizeFirstLetter(item.role)}
-        </span>
-      )
-    },
-    { 
-      header: 'Status', 
-      key: 'status', 
-      render: (item: StaffMember) => (
-        <span style={{ 
-          padding: '4px 8px', 
-          borderRadius: '12px', 
-          fontSize: '12px',
-          fontWeight: 'bold',
-          backgroundColor: item.status === 'active' ? '#e8f5e8' : '#ffebee',
-          color: item.status === 'active' ? '#2e7d32' : '#c62828'
-        }}>
-          {capitalizeFirstLetter(item.status)}
         </span>
       )
     },
