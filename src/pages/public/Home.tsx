@@ -8,14 +8,12 @@ import { Link } from 'react-router-dom';
 const Home: React.FC = () => {
   return (
     <div className="elegant-home">
-      {/* Explicitly set the background image like in Services.tsx */}
       <HeroSection
         title="Joyce Aesthetic Salon & Spa"
         subtitle="Experience unparalleled beauty and tranquility."
         backgroundImage="/assets/images/hero-woman.jpg"
       />
       
-      {/* Rest of your code remains the same */}
       <section className="page-container services-section">
         <div className="section-header">
           <h2 className="section-title">Our Signature Services</h2>
@@ -44,7 +42,7 @@ const Home: React.FC = () => {
           </div>
           <div className="text-center">
             <Link to="/contact">
-              <Button variant="primary" size="medium">Book a Consultation</Button>
+              <Button variant="primary" size="medium">Contact us</Button>
             </Link>
           </div>
         </div>
