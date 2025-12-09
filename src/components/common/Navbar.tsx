@@ -23,6 +23,16 @@ const Navbar: React.FC = () => {
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
+  // Handle navigation to dashboard or login
+  const handleDashboardClick = () => {
+    if (!isAuthenticated) {
+      navigate('/login');
+    } else {
+      navigate(`/${user?.role}/dashboard`);
+    }
+    closeMobileMenu();
+  };
+
   return (
     <nav className="navbar">
       <Link to="/">
@@ -31,7 +41,8 @@ const Navbar: React.FC = () => {
 
       <ul className="nav-links">
         {NAV_LINKS.map((link) => (
-          (link.name !== "Login" || !isAuthenticated) && (
+          // Filter out Dashboard from NAV_LINKS since we handle it separately
+          link.name !== "Dashboard" && (
             <li key={link.name} className="nav-link">
               <NavLink
                 to={link.path}
@@ -42,16 +53,15 @@ const Navbar: React.FC = () => {
             </li>
           )
         ))}
-        {isAuthenticated && (
-          <li className="nav-link">
-            <NavLink
-              to={`/${user?.role}/dashboard`}
-              className={({ isActive }) => (isActive ? 'active' : '')}
-            >
-              Dashboard
-            </NavLink>
-          </li>
-        )}
+        {/* Single Dashboard link */}
+        <li className="nav-link">
+          <NavLink
+            to={isAuthenticated ? `/${user?.role}/dashboard` : '/login'}
+            className={({ isActive }) => (isActive ? 'active' : '')}
+          >
+            Dashboard
+          </NavLink>
+        </li>
       </ul>
 
       <div className="navbar-auth-links">
@@ -76,7 +86,8 @@ const Navbar: React.FC = () => {
       <div className={`mobile-nav-overlay ${isMobileMenuOpen ? 'open' : ''}`}>
         <ul className="nav-links">
           {NAV_LINKS.map((link) => (
-            (link.name !== "Login" || !isAuthenticated) && (
+            // Filter out Dashboard from NAV_LINKS for mobile too
+            link.name !== "Dashboard" && (
               <li key={link.name} className="nav-link">
                 <NavLink
                   to={link.path}
@@ -88,22 +99,21 @@ const Navbar: React.FC = () => {
               </li>
             )
           ))}
-          {isAuthenticated && (
-            <li className="nav-link">
-              <NavLink
-                to={`/${user?.role}/dashboard`}
-                onClick={closeMobileMenu}
-                className={({ isActive }) => (isActive ? 'active' : '')}
-              >
-                Dashboard
-              </NavLink>
-            </li>
-          )}
+          {/* Single Dashboard link for mobile */}
+          <li className="nav-link">
+            <NavLink
+              to={isAuthenticated ? `/${user?.role}/dashboard` : '/login'}
+              onClick={closeMobileMenu}
+              className={({ isActive }) => (isActive ? 'active' : '')}
+            >
+              Dashboard
+            </NavLink>
+          </li>
         </ul>
         <div className="navbar-auth-links">
           {!isAuthenticated ? (
             <>
-              <Button variant="secondary" size="small" onClick={() => { navigate('/login'); closeMobileMenu(); }}>Login</Button>
+              <Button variant="primary" size="small" onClick={() => { navigate('/login'); closeMobileMenu(); }}>Login</Button>
               <Button variant="primary" size="small" onClick={() => { navigate('/signup'); closeMobileMenu(); }}>Sign Up</Button>
             </>
           ) : (

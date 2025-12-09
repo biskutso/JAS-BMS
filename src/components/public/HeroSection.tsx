@@ -1,17 +1,30 @@
-// src/components/public/HeroSection.tsx
+// src/components/public/HeroSection.tsx - Customizable Version
 import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
 interface HeroSectionProps {
   title?: string;
   subtitle?: string;
   backgroundImage?: string;
+  buttonText?: string;
+  buttonLink?: string;
+  showButton?: boolean; // Optional prop to control button visibility
 }
 
 const HeroSection: React.FC<HeroSectionProps> = ({
   title = 'Joyce Aesthetic Salon & Spa',
   subtitle = 'Experience unparalleled beauty and tranquility.',
   backgroundImage = '/assets/images/hero-woman.jpg',
+  buttonText = 'Explore Our Services',
+  buttonLink = '/services',
+  showButton = true,
 }) => {
+  const location = useLocation();
+  const isServicesPage = location.pathname === '/services';
+  
+  // Determine if button should be shown
+  const shouldShowButton = showButton && (!isServicesPage || buttonLink !== '/services');
+
   return (
     <section 
       className="hero-section"
@@ -30,9 +43,15 @@ const HeroSection: React.FC<HeroSectionProps> = ({
         <p className="hero-subtitle animate-fade-in-up" style={{animationDelay: '0.4s'}}>
           {subtitle}
         </p>
-        <a href="/services" className="hero-button animate-fade-in-up" style={{animationDelay: '0.6s'}}>
-          Explore Our Services
-        </a>
+        
+        {/* Conditionally render button */}
+        {shouldShowButton && (
+          <Link to={buttonLink}>
+            <p className="hero-button animate-fade-in-up" style={{animationDelay: '0.6s'}}>
+              {buttonText}
+            </p>
+          </Link>
+        )}
       </div>
     </section>
   );

@@ -191,6 +191,7 @@
   font-size: 2rem;
   cursor: pointer;
   color: var(--color-primary-dark);
+  z-index: 1000;
 }
 
 .mobile-nav-overlay {

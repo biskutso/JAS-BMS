@@ -17,9 +17,9 @@ export const FOOTER_LINKS = [
 ];
 
 export const SOCIAL_MEDIA_LINKS = [
-  { name: "Facebook", url: "https://facebook.com/joycespa" },
-  { name: "Instagram", url: "https://instagram.com/joycespa" },
-  { name: "Twitter", url: "https://twitter.com/joycespa" },
+  { name: "Facebook", url: "https://www.facebook.com/profile.php?id=61551470870820" },
+  { name: "Instagram", url: "https://www.instagram.com/joycesalonduma/" },
+  { name: "Twitter", url: "https://twitter.com" },
 ];
 
 
