@@ -5,11 +5,11 @@ import Table from '@components/dashboard/Table';
 import Button from '@components/common/Button';
 import Modal from '@components/common/Modal';
 import { useModal } from '@hooks/useModal';
-import { Booking, BookingStatus } from '@models/booking';
+import { BookingStatus } from '@models/booking';
 import { formatCurrency, formatDate } from '@utils/helpers';
-import { User } from '@models/user';
 import { supabase } from '../../supabaseClient';
-import { SupabaseNotificationService } from '../../services/supabaseNotificationService'; // Add this import
+import { SupabaseNotificationService } from '../../services/supabaseNotificationService';
+import "../../assets/styles/dashboards.css";
 
 // Create a complete interface that includes all Booking properties
 interface BookingWithRelations {
@@ -48,12 +48,17 @@ const ManageBookings: React.FC = () => {
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<BookingWithRelations | null>(null);
   const { isOpen, openModal, closeModal } = useModal();
-  const [formData, setFormData] = useState<Partial<Booking & { bookingDate: string; bookingTime: string }>>({});
+  const [formData, setFormData] = useState<Partial<BookingWithRelations & { bookingDate: string; bookingTime: string }>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [notificationLoading, setNotificationLoading] = useState<string | null>(null);
+  
+  // New state for mini modals
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [selectedBookingForModal, setSelectedBookingForModal] = useState<BookingWithRelations | null>(null);
 
   // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
@@ -475,6 +480,7 @@ We apologize for any inconvenience.`;
       setSuccessMessage(successMsg);
       setTimeout(() => setSuccessMessage(null), 3000);
       await fetchBookings();
+      setShowStatusModal(false);
     } catch (err: any) {
       setError(`Failed to update status: ${err.message}`);
     } finally {
@@ -482,15 +488,29 @@ We apologize for any inconvenience.`;
     }
   };
 
-  const formatDateTime = (date: string, time: string) => {
+  const formatDisplayDateTime = (date: string, time: string) => {
     if (!date) return 'N/A';
     
-    const dateObj = new Date(date);
-    const formattedDate = dateObj.toLocaleDateString();
-    
-    if (!time) return formattedDate;
-    
-    return `${formattedDate} at ${time}`;
+    try {
+      const dateObj = new Date(date);
+      const formattedDate = dateObj.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+      
+      if (!time) return formattedDate;
+      
+      // Parse the time and format it properly
+      const [hours, minutes] = time.split(':');
+      const hour = parseInt(hours);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour % 12 || 12;
+      
+      return `${formattedDate} at ${displayHour}:${minutes} ${ampm}`;
+    } catch (error) {
+      return 'Invalid date';
+    }
   };
 
   // Helper function to determine if booking is active (can be edited)
@@ -498,15 +518,34 @@ We apologize for any inconvenience.`;
     return status === 'pending' || status === 'confirmed';
   };
 
+  // Handler functions for mini modals
+  const handleStatusButtonClick = (booking: BookingWithRelations) => {
+    setSelectedBookingForModal(booking);
+    setShowStatusModal(true);
+  };
+
+  const handleNotificationButtonClick = (booking: BookingWithRelations) => {
+    setSelectedBookingForModal(booking);
+    setShowNotificationModal(true);
+  };
+
+  const handleCloseModals = () => {
+    setShowStatusModal(false);
+    setShowNotificationModal(false);
+    setSelectedBookingForModal(null);
+  };
+
   const columns = [
     { 
       header: 'Service', 
       key: 'service', 
       render: (item: BookingWithRelations) => (
-        <div>
-          <div style={{ fontWeight: 'bold' }}>{item.service_name}</div>
-          <div style={{ fontSize: '14px', color: '#666' }}>
-            {formatCurrency(item.service_price)} • {item.service_duration}min
+        <div className="service-info-container">
+          <div className="service-name">{item.service_name}</div>
+          <div className="service-price-duration">
+            <span>{formatCurrency(item.service_price)}</span>
+            <span>•</span>
+            <span>{item.service_duration}min</span>
           </div>
         </div>
       )
@@ -515,9 +554,9 @@ We apologize for any inconvenience.`;
       header: 'Customer', 
       key: 'customer', 
       render: (item: BookingWithRelations) => (
-        <div>
-          <div>{item.customer_name}</div>
-          <div style={{ fontSize: '12px', color: '#666' }}>{item.customer_email}</div>
+        <div className="customer-info-container">
+          <div className="customer-name">{item.customer_name}</div>
+          <div className="customer-email">{item.customer_email}</div>
         </div>
       )
     },
@@ -525,10 +564,10 @@ We apologize for any inconvenience.`;
       header: 'Staff', 
       key: 'staff', 
       render: (item: BookingWithRelations) => (
-        <div>
-          <div>{item.staff_name}</div>
+        <div className="staff-info-container">
+          <div className="staff-name">{item.staff_name}</div>
           {item.staff_email && (
-            <div style={{ fontSize: '12px', color: '#666' }}>{item.staff_email}</div>
+            <div className="staff-email">{item.staff_email}</div>
           )}
         </div>
       )
@@ -537,13 +576,10 @@ We apologize for any inconvenience.`;
       header: 'Date & Time', 
       key: 'datetime', 
       render: (item: BookingWithRelations) => (
-        <div>
-          <div>{formatDateTime(item.booking_date, item.booking_time)}</div>
-          {item.booking_time && (
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              {item.booking_time}
-            </div>
-          )}
+        <div className="booking-datetime-container">
+          <div className="booking-date-time">
+            {formatDisplayDateTime(item.booking_date, item.booking_time)}
+          </div>
         </div>
       )
     },
@@ -551,21 +587,8 @@ We apologize for any inconvenience.`;
       header: 'Status', 
       key: 'status', 
       render: (item: BookingWithRelations) => (
-        <div>
-          <span style={{ 
-            padding: '4px 8px', 
-            borderRadius: '12px', 
-            fontSize: '12px',
-            fontWeight: 'bold',
-            backgroundColor: 
-              item.status === 'confirmed' ? '#e8f5e8' :
-              item.status === 'completed' ? '#e3f2fd' :
-              item.status === 'cancelled' ? '#ffebee' : '#fff3e0',
-            color: 
-              item.status === 'confirmed' ? '#2e7d32' :
-              item.status === 'completed' ? '#1565c0' :
-              item.status === 'cancelled' ? '#c62828' : '#f57c00'
-          }}>
+        <div className="booking-status-container">
+          <span className={`booking-status-badge booking-status-badge-${item.status}`}>
             {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
           </span>
         </div>
@@ -579,176 +602,58 @@ We apologize for any inconvenience.`;
         const isNotificationLoading = notificationLoading === item.id;
         
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '200px' }}>
+          <div className="booking-actions-container">
             {isActive ? (
               <>
-                {/* Primary Actions */}
-                <div style={{ 
-                  display: 'flex', 
-                  gap: '6px', 
-                  padding: '6px',
-                  backgroundColor: '#f8f9fa',
-                  borderRadius: '6px',
-                  border: '1px solid #e9ecef'
-                }}>
-                  <Button 
-                    variant="secondary" 
-                    size="small" 
-                    onClick={() => handleEditClick(item)}
-                    style={{ flex: 1 }}
-                  >
-                    ✏️ Edit
-                  </Button>
-                  <Button 
-                    variant="text" 
-                    size="small" 
-                    onClick={() => handleDelete(item.id)} 
-                    style={{ 
-                      color: '#d32f2f',
-                      minWidth: 'auto'
-                    }}
-                    title="Delete booking"
-                  >
-                    🗑️
-                  </Button>
-                </div>
-
-                {/* Status Actions */}
-                <div style={{ 
-                  display: 'flex', 
-                  gap: '4px', 
-                  flexWrap: 'wrap',
-                  padding: '6px',
-                  backgroundColor: '#f8f9fa', 
-                  borderRadius: '6px',
-                  border: '1px solid #e9ecef'
-                }}>
-                  {item.status !== 'confirmed' && (
-                    <Button 
-                      variant="text" 
-                      size="small" 
-                      onClick={() => handleStatusUpdate(item.id, 'confirmed')}
-                      style={{ 
-                        fontSize: '11px', 
-                        padding: '4px 8px',
-                        backgroundColor: '#e8f5e8',
-                        border: '1px solid #c8e6c9',
-                        color: '#2e7d32'
-                      }}
-                    >
-                      ✓ Confirm
-                    </Button>
-                  )}
-                  {item.status !== 'completed' && (
-                    <Button 
-                      variant="text" 
-                      size="small" 
-                      onClick={() => handleStatusUpdate(item.id, 'completed')}
-                      style={{ 
-                        fontSize: '11px', 
-                        padding: '4px 8px',
-                        backgroundColor: '#e3f2fd',
-                        border: '1px solid #bbdefb',
-                        color: '#1565c0'
-                      }}
-                    >
-                      ✓ Complete
-                    </Button>
-                  )}
-                  {item.status !== 'cancelled' && (
-                    <Button 
-                      variant="text" 
-                      size="small" 
-                      onClick={() => handleStatusUpdate(item.id, 'cancelled')}
-                      style={{ 
-                        fontSize: '11px', 
-                        padding: '4px 8px',
-                        backgroundColor: '#ffebee',
-                        border: '1px solid #ffcdd2',
-                        color: '#c62828'
-                      }}
-                    >
-                      ✗ Cancel
-                    </Button>
-                  )}
-                </div>
-
-                {/* Customer Notification Actions */}
-                <div style={{ 
-                  display: 'flex', 
-                  gap: '6px',
-                  padding: '8px',
-                  backgroundColor: '#fff3e0',
-                  borderRadius: '6px',
-                  border: '1px solid #ffe0b2'
-                }}>
-                  <Button 
-                    variant="text" 
-                    size="small" 
-                    onClick={() => requestCustomerReschedule(item)}
-                    disabled={isNotificationLoading}
-                    style={{ 
-                      fontSize: '11px', 
-                      padding: '6px 8px',
-                      backgroundColor: '#e3f2fd',
-                      border: '1px solid #bbdefb',
-                      color: '#1976d2',
-                      flex: 1,
-                      opacity: isNotificationLoading ? 0.6 : 1
-                    }}
-                  >
-                    {isNotificationLoading ? '⏳ Sending...' : '🔄 Reschedule'}
-                  </Button>
-                  <Button 
-                    variant="text" 
-                    size="small" 
-                    onClick={() => requestCustomerCancellation(item)}
-                    disabled={isNotificationLoading}
-                    style={{ 
-                      fontSize: '11px', 
-                      padding: '6px 8px',
-                      backgroundColor: '#ffebee',
-                      border: '1px solid #ffcdd2',
-                      color: '#d32f2f',
-                      flex: 1,
-                      opacity: isNotificationLoading ? 0.6 : 1
-                    }}
-                  >
-                    {isNotificationLoading ? '⏳ Sending...' : '⚠️ Cancel'}
-                  </Button>
-                </div>
+                {/* All 4 buttons stacked vertically */}
+                <Button 
+                  variant="text"
+                  className="stacked-button stacked-edit-button"
+                  onClick={() => handleEditClick(item)}
+                  title="Edit booking"
+                >
+                  Edit
+                </Button>
+                
+                <Button 
+                  variant="text"
+                  className="stacked-button stacked-delete-button"
+                  onClick={() => handleDelete(item.id)}
+                  title="Delete booking"
+                >
+                  Delete
+                </Button>
+                
+                <Button 
+                  variant="text"
+                  className="stacked-button stacked-status-button"
+                  onClick={() => handleStatusButtonClick(item)}
+                  title="Change booking status"
+                >
+                  Status
+                </Button>
+                
+                <Button 
+                  variant="text"
+                  className="stacked-button stacked-notify-button"
+                  onClick={() => handleNotificationButtonClick(item)}
+                  disabled={isNotificationLoading}
+                  title="Send notifications to customer"
+                >
+                  {isNotificationLoading ? 'Sending...' : 'Notify'}
+                </Button>
               </>
             ) : (
-              <div style={{ 
-                display: 'flex', 
-                gap: '6px', 
-                alignItems: 'center',
-                padding: '8px',
-                backgroundColor: '#f5f5f5',
-                borderRadius: '6px',
-                border: '1px solid #e0e0e0'
-              }}>
+              <div className="readonly-actions">
                 <Button 
-                  variant="text" 
-                  size="small" 
-                  onClick={() => handleDelete(item.id)} 
-                  style={{ 
-                    color: '#d32f2f',
-                    fontSize: '11px',
-                    padding: '4px 8px'
-                  }}
+                  variant="text"
+                  className="stacked-button stacked-delete-button readonly"
+                  onClick={() => handleDelete(item.id)}
+                  title="Delete booking"
                 >
-                  🗑️ Delete
+                  Delete
                 </Button>
-                <span 
-                  style={{ 
-                    fontSize: '11px', 
-                    color: '#666', 
-                    fontStyle: 'italic',
-                    flex: 1,
-                    textAlign: 'center'
-                  }}
-                >
+                <span className="read-only-text">
                   Read-only
                 </span>
               </div>
@@ -763,52 +668,85 @@ We apologize for any inconvenience.`;
   const availableTimeSlots = formData.bookingDate ? getAvailableTimeSlots(formData.bookingDate) : [];
 
   return (
-    <>
-      <DashboardHeader 
-        title="Manage Bookings"
-        actions={
-          <Button variant="secondary" onClick={fetchBookings} disabled={loading}>
-            🔄 Refresh Bookings
-          </Button>
-        }
-      />
-      <div className="page-container">
-        <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
-          View and manage all customer appointments, assign staff, and update statuses.
-          <br />
-          <small style={{ color: '#666', fontSize: '14px' }}>
-            Use the notification buttons to manually send requests to customers when needed.
-          </small>
-        </p>
+    <div className="dashboard-layout-container">
+      <div className="dashboard-main-content">
+        <DashboardHeader title="Manage Bookings" />
         
-        {successMessage && (
-          <div style={{
-            backgroundColor: '#e8f5e8',
-            color: '#2e7d32',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '15px',
-            border: '1px solid #c8e6c9'
-          }}>
-            {successMessage}
+        <div className="dashboard-content-wrapper">
+          <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
+            View and manage all customer appointments, assign staff, and update statuses.
+            <br />
+            <small style={{ color: '#666', fontSize: '14px' }}>
+              Use the notification buttons to manually send requests to customers when needed.
+            </small>
+          </p>
+
+          {successMessage && (
+            <div className="inventory-success-message">
+              {successMessage}
+            </div>
+          )}
+          
+          {loading && !isOpen && (
+            <div className="dashboard-loading">
+              <p>Loading bookings...</p>
+            </div>
+          )}
+          
+          {error && (
+            <div className="dashboard-error">
+              {error}
+              <div className="dashboard-error-actions">
+                <Button 
+                  variant="text" 
+                  size="small" 
+                  onClick={fetchBookings}
+                  style={{ fontSize: '14px' }}
+                >
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          <div className="recent-bookings-section">
+            <div className="recent-bookings-header">
+              <h3 className="recent-bookings-title">
+                Bookings ({bookings.length})
+              </h3>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <Button 
+                  variant="secondary" 
+                  onClick={fetchBookings} 
+                  disabled={loading}
+                  size="small"
+                >
+                  🔄 Refresh Bookings
+                </Button>
+              </div>
+            </div>
+
+            {bookings.length > 0 ? (
+              <Table 
+                data={bookings} 
+                columns={columns} 
+                emptyMessage="No bookings found. Bookings will appear here when customers make appointments."
+              />
+            ) : (
+              <div className="dashboard-empty-state">
+                <p className="empty-state-message">
+                  No bookings found.
+                </p>
+                <p className="empty-state-subtext">
+                  Bookings will appear here when customers make appointments.
+                </p>
+              </div>
+            )}
           </div>
-        )}
-        
-        {loading && !isOpen && <p style={{textAlign: 'center'}}>Loading bookings...</p>}
-        {error && (
-          <div className="auth-error-message" style={{textAlign: 'left', whiteSpace: 'pre-wrap'}}>
-            {error}
-          </div>
-        )}
-        
-        <Table 
-          data={bookings} 
-          columns={columns} 
-          caption={`Bookings (${bookings.length})`}
-          emptyMessage="No bookings found. Bookings will appear here when customers make appointments."
-        />
+        </div>
       </div>
 
+      {/* Main Edit Booking Modal */}
       <Modal isOpen={isOpen} onClose={closeModal} title="Edit Booking">
         {selectedBooking && (
           <form onSubmit={handleUpdateBooking} className="contact-form">
@@ -862,12 +800,12 @@ We apologize for any inconvenience.`;
                 ))}
               </select>
               {!isActiveBooking(selectedBooking.status) && (
-                <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+                <small className="disabled-note">
                   Cannot modify staff for completed or cancelled bookings
                 </small>
               )}
               {staffMembers.length === 0 && (
-                <small style={{ color: '#d32f2f', marginTop: '4px', display: 'block' }}>
+                <small className="error-note">
                   No staff members found. Please add staff members first.
                 </small>
               )}
@@ -887,7 +825,7 @@ We apologize for any inconvenience.`;
                 max={getMaxDate()}
               />
               {!isActiveBooking(selectedBooking.status) && (
-                <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+                <small className="disabled-note">
                   Cannot modify date for completed or cancelled bookings
                 </small>
               )}
@@ -921,12 +859,12 @@ We apologize for any inconvenience.`;
                 ))}
               </select>
               {!isActiveBooking(selectedBooking.status) && (
-                <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+                <small className="disabled-note">
                   Cannot modify time for completed or cancelled bookings
                 </small>
               )}
               {formData.bookingDate && (
-                <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+                <small className="time-slot-note">
                   {formData.bookingDate === getTodayDate() 
                     ? `Today's available time slots (current time: ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')})`
                     : 'Business hours: 9:00 AM - 6:00 PM'
@@ -934,7 +872,7 @@ We apologize for any inconvenience.`;
                 </small>
               )}
               {formData.bookingDate && availableTimeSlots.length === 0 && (
-                <small style={{ color: '#d32f2f', marginTop: '4px', display: 'block' }}>
+                <small className="error-note">
                   No available time slots for the selected date. Please choose another date.
                 </small>
               )}
@@ -956,7 +894,7 @@ We apologize for any inconvenience.`;
                 <option value="cancelled">Cancelled</option>
               </select>
               {!isActiveBooking(selectedBooking.status) && (
-                <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+                <small className="disabled-note">
                   Cannot modify status for completed or cancelled bookings
                 </small>
               )}
@@ -974,31 +912,19 @@ We apologize for any inconvenience.`;
                 disabled={!isActiveBooking(selectedBooking.status)}
               ></textarea>
               {!isActiveBooking(selectedBooking.status) && (
-                <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+                <small className="disabled-note">
                   Cannot modify notes for completed or cancelled bookings
                 </small>
               )}
             </div>
             
             {modalError && (
-              <div style={{
-                backgroundColor: '#fee',
-                border: '1px solid #f5c6cb',
-                color: '#721c24',
-                padding: '12px',
-                borderRadius: '4px',
-                marginBottom: '16px'
-              }}>
+              <div className="auth-error-message">
                 {modalError}
               </div>
             )}
             
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'flex-end', 
-              gap: 'var(--spacing-md)', 
-              marginTop: 'var(--spacing-lg)' 
-            }}>
+            <div className="modal-actions">
               <Button variant="secondary" onClick={closeModal} disabled={loading}>
                 Cancel
               </Button>
@@ -1012,22 +938,118 @@ We apologize for any inconvenience.`;
             </div>
 
             {!isActiveBooking(selectedBooking.status) && (
-              <div style={{
-                backgroundColor: '#fff3e0',
-                border: '1px solid #ffb74d',
-                color: '#f57c00',
-                padding: '12px',
-                borderRadius: '4px',
-                marginTop: '16px',
-                textAlign: 'center'
-              }}>
+              <div className="readonly-notice">
                 <strong>Read-only Mode:</strong> This booking is {selectedBooking.status} and cannot be modified.
               </div>
             )}
           </form>
         )}
       </Modal>
-    </>
+
+      {/* Mini Modal for Status Change */}
+      {showStatusModal && selectedBookingForModal && (
+        <div className="mini-modal-overlay" onClick={handleCloseModals}>
+          <div className="mini-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="mini-modal-header">
+              <h3>Change Booking Status</h3>
+              <button className="mini-modal-close" onClick={handleCloseModals}>×</button>
+            </div>
+            <div className="mini-modal-content">
+              <p className="mini-modal-description">
+                Update status for <strong>{selectedBookingForModal.customer_name}'s</strong> booking:
+                <br />
+                <em>{selectedBookingForModal.service_name}</em>
+              </p>
+              <div className="mini-modal-options">
+                {selectedBookingForModal.status !== 'confirmed' && (
+                  <button 
+                    className="mini-modal-option confirm"
+                    onClick={() => handleStatusUpdate(selectedBookingForModal.id, 'confirmed')}
+                    disabled={loading}
+                  >
+                    <span className="option-icon">✓</span>
+                    <span className="option-text">Confirm Booking</span>
+                  </button>
+                )}
+                {selectedBookingForModal.status !== 'completed' && (
+                  <button 
+                    className="mini-modal-option complete"
+                    onClick={() => handleStatusUpdate(selectedBookingForModal.id, 'completed')}
+                    disabled={loading}
+                  >
+                    <span className="option-icon">✓</span>
+                    <span className="option-text">Mark as Completed</span>
+                  </button>
+                )}
+                {selectedBookingForModal.status !== 'cancelled' && (
+                  <button 
+                    className="mini-modal-option cancel"
+                    onClick={() => handleStatusUpdate(selectedBookingForModal.id, 'cancelled')}
+                    disabled={loading}
+                  >
+                    <span className="option-icon">✗</span>
+                    <span className="option-text">Cancel Booking</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="mini-modal-footer">
+              <Button variant="secondary" onClick={handleCloseModals}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mini Modal for Notifications */}
+      {showNotificationModal && selectedBookingForModal && (
+        <div className="mini-modal-overlay" onClick={handleCloseModals}>
+          <div className="mini-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="mini-modal-header">
+              <h3>Send Notification</h3>
+              <button className="mini-modal-close" onClick={handleCloseModals}>×</button>
+            </div>
+            <div className="mini-modal-content">
+              <p className="mini-modal-description">
+                Send notification to <strong>{selectedBookingForModal.customer_name}</strong> about:
+                <br />
+                <em>{selectedBookingForModal.service_name}</em>
+              </p>
+              <div className="mini-modal-options">
+                <button 
+                  className="mini-modal-option reschedule"
+                  onClick={() => {
+                    requestCustomerReschedule(selectedBookingForModal);
+                    handleCloseModals();
+                  }}
+                  disabled={notificationLoading === selectedBookingForModal.id}
+                >
+                  <span className="option-icon">🔄</span>
+                  <span className="option-text">Request Reschedule</span>
+                </button>
+                <button 
+                  className="mini-modal-option cancel-notify"
+                  onClick={() => {
+                    requestCustomerCancellation(selectedBookingForModal);
+                    handleCloseModals();
+                  }}
+                  disabled={notificationLoading === selectedBookingForModal.id}
+                >
+                  <span className="option-icon">⚠️</span>
+                  <span className="option-text">Request Cancellation</span>
+                </button>
+              </div>
+            </div>
+            <div className="mini-modal-footer">
+              <Button variant="secondary" onClick={handleCloseModals}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

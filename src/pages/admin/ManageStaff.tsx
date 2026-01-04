@@ -5,9 +5,10 @@ import Table from '@components/dashboard/Table';
 import Button from '@components/common/Button';
 import Modal from '@components/common/Modal';
 import { useModal } from '@hooks/useModal';
-import { User, UserRole } from '@models/user';
+import { UserRole } from '@models/user';
 import { capitalizeFirstLetter } from '@utils/helpers';
 import { supabase } from '../../supabaseClient';
+import "../../assets/styles/dashboards.css";
 
 // Eye icons for show/hide password
 const EyeIcon = () => (
@@ -207,6 +208,7 @@ const ManageStaff: React.FC = () => {
 
     setLoading(true);
     setError(null);
+    setSuccessMessage(null);
     try {
       const { error: userError } = await supabase
         .from('users')
@@ -264,6 +266,7 @@ const ManageStaff: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccessMessage(null);
 
     try {
       if (!formData.email || !formData.firstName || !formData.lastName) {
@@ -313,9 +316,9 @@ const ManageStaff: React.FC = () => {
       header: 'Name', 
       key: 'name', 
       render: (item: StaffMember) => (
-        <div>
-          <div>{item.firstName} {item.lastName}</div>
-          <div style={{ fontSize: '12px', color: '#666', fontFamily: 'monospace' }}>
+        <div className="customer-info-container">
+          <div className="customer-name">{item.firstName} {item.lastName}</div>
+          <div className="customer-email">
             ID: {item.id.substring(0, 8)}...
           </div>
         </div>
@@ -324,22 +327,17 @@ const ManageStaff: React.FC = () => {
     { 
       header: 'Email', 
       key: 'email', 
-      render: (item: StaffMember) => item.email
+      render: (item: StaffMember) => (
+        <span className="staff-email">
+          {item.email}
+        </span>
+      )
     },
     { 
       header: 'Role', 
       key: 'role', 
       render: (item: StaffMember) => (
-        <span style={{ 
-          padding: '4px 8px', 
-          borderRadius: '12px', 
-          fontSize: '12px',
-          fontWeight: 'bold',
-          backgroundColor: item.role === 'admin' ? '#fff3e0' : 
-                         item.role === 'staff' ? '#e8f5e8' : '#f5f5f5',
-          color: item.role === 'admin' ? '#ef6c00' : 
-                item.role === 'staff' ? '#2e7d32' : '#666'
-        }}>
+        <span className={`role-badge role-${item.role}`}>
           {capitalizeFirstLetter(item.role)}
         </span>
       )
@@ -347,13 +345,17 @@ const ManageStaff: React.FC = () => {
     { 
       header: 'Created', 
       key: 'created', 
-      render: (item: StaffMember) => new Date(item.created_at).toLocaleDateString()
+      render: (item: StaffMember) => (
+        <span className="staff-created-date">
+          {new Date(item.created_at).toLocaleDateString()}
+        </span>
+      )
     },
     {
       header: 'Actions',
       key: 'actions',
       render: (item: StaffMember) => (
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div className="staff-actions">
           <Button 
             variant="secondary" 
             size="small" 
@@ -365,7 +367,7 @@ const ManageStaff: React.FC = () => {
             variant="text" 
             size="small" 
             onClick={() => handleDelete(item.id)} 
-            style={{ color: '#d32f2f' }}
+            className="delete-button"
           >
             Delete
           </Button>
@@ -379,51 +381,86 @@ const ManageStaff: React.FC = () => {
   }, []);
 
   return (
-    <>
-      <DashboardHeader
-        title="Manage Staff"
-        actions={
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <Button variant="secondary" onClick={fetchStaffMembers} disabled={loading}>
-              Refresh Users
-            </Button>
-            <Button variant="primary" onClick={handleAddClick} disabled={loading}>
-              Add New Staff
-            </Button>
-          </div>
-        }
-      />
-      <div className="page-container">
-        <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
-          Manage all staff and admin users in the system.
-        </p>
+    <div className="dashboard-layout-container">
+      <div className="dashboard-main-content">
+        <DashboardHeader title="Manage Staff" />
         
-        {successMessage && (
-          <div style={{
-            backgroundColor: '#e8f5e8',
-            color: '#2e7d32',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '15px',
-            border: '1px solid #c8e6c9'
-          }}>
-            {successMessage}
+        <div className="dashboard-content-wrapper">
+          <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
+            Manage all staff and admin users in the system.
+          </p>
+
+          {successMessage && (
+            <div className="inventory-success-message">
+              {successMessage}
+            </div>
+          )}
+          
+          {loading && !isOpen && (
+            <div className="dashboard-loading">
+              <p>Loading users...</p>
+            </div>
+          )}
+          
+          {error && (
+            <div className="dashboard-error">
+              {error}
+              <div className="dashboard-error-actions">
+                <Button 
+                  variant="text" 
+                  size="small" 
+                  onClick={fetchStaffMembers}
+                  style={{ fontSize: '14px' }}
+                >
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          <div className="recent-bookings-section">
+            <div className="recent-bookings-header">
+              <h3 className="recent-bookings-title">
+                Staff & Admin Users ({staffMembers.length})
+              </h3>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <Button 
+                  variant="secondary" 
+                  onClick={fetchStaffMembers} 
+                  disabled={loading}
+                  size="small"
+                >
+                  Refresh
+                </Button>
+                <Button 
+                  variant="primary" 
+                  onClick={handleAddClick} 
+                  disabled={loading}
+                  size="small"
+                >
+                  Add New Staff
+                </Button>
+              </div>
+            </div>
+
+            {staffMembers.length > 0 ? (
+              <Table 
+                data={staffMembers} 
+                columns={columns} 
+                emptyMessage="No staff or admin users found. Add your first user to get started."
+              />
+            ) : (
+              <div className="dashboard-empty-state">
+                <p className="empty-state-message">
+                  No staff or admin users found.
+                </p>
+                <p className="empty-state-subtext">
+                  Add your first user to get started.
+                </p>
+              </div>
+            )}
           </div>
-        )}
-        
-        {loading && !isOpen && <p style={{textAlign: 'center'}}>Loading users...</p>}
-        {error && (
-          <div className="auth-error-message" style={{textAlign: 'left', whiteSpace: 'pre-wrap'}}>
-            {error}
-          </div>
-        )}
-        
-        <Table 
-          data={staffMembers} 
-          columns={columns} 
-          caption={`Staff & Admin Users (${staffMembers.length})`}
-          emptyMessage="No staff or admin users found. Add your first user to get started."
-        />
+        </div>
       </div>
 
       <Modal isOpen={isOpen} onClose={closeModal} title={editingStaff ? "Edit User" : "Add New User"}>
@@ -481,7 +518,7 @@ const ManageStaff: React.FC = () => {
             <label htmlFor="password">
               {editingStaff ? 'New Password (leave blank to keep current)' : 'Password *'}
             </label>
-            <div style={{ position: 'relative' }}>
+            <div className="password-input-container">
               <input 
                 type={showPassword ? "text" : "password"}
                 id="password" 
@@ -490,22 +527,12 @@ const ManageStaff: React.FC = () => {
                 onChange={handleChange} 
                 {...(!editingStaff && { required: true })}
                 placeholder={editingStaff ? "Enter new password to update" : "Set password for user"}
-                style={{ paddingRight: '40px', width: '100%' }}
+                className="password-input"
               />
               <button
                 type="button"
                 onClick={togglePasswordVisibility}
-                style={{
-                  position: 'absolute',
-                  right: '10px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: '#666',
-                  padding: '4px'
-                }}
+                className="password-toggle-button"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOffIcon /> : <EyeIcon />}
@@ -514,14 +541,8 @@ const ManageStaff: React.FC = () => {
           </div>
 
           {!editingStaff && (
-            <div style={{ 
-              backgroundColor: '#f0f8ff', 
-              padding: '12px', 
-              borderRadius: '4px', 
-              marginBottom: '15px',
-              border: '1px solid #b3d9ff'
-            }}>
-              <p style={{ fontSize: '14px', color: '#0066cc', margin: 0 }}>
+            <div className="info-note">
+              <p>
                 <strong>Note:</strong> New users will be created with both auth account and user profile.
                 They will receive an email confirmation to activate their account.
               </p>
@@ -530,12 +551,7 @@ const ManageStaff: React.FC = () => {
           
           {error && <p className="auth-error-message">{error}</p>}
           
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'flex-end', 
-            gap: 'var(--spacing-md)', 
-            marginTop: 'var(--spacing-lg)' 
-          }}>
+          <div className="modal-actions">
             <Button variant="secondary" onClick={closeModal} disabled={loading}>
               Cancel
             </Button>
@@ -545,7 +561,7 @@ const ManageStaff: React.FC = () => {
           </div>
         </form>
       </Modal>
-    </>
+    </div>
   );
 };
 

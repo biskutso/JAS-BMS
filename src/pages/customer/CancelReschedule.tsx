@@ -9,6 +9,7 @@ import { Booking, BookingStatus } from '@models/booking';
 import { formatCurrency, formatDate } from '@utils/helpers';
 import { useAuth } from '@context/AuthContext';
 import { supabase } from '../../supabaseClient';
+import '../../assets/styles/customerdashboards.css';
 
 interface BookingWithRelations extends Booking {
   service_name: string;
@@ -311,31 +312,24 @@ const CancelReschedule: React.FC = () => {
     { 
       header: 'Status', 
       key: 'status',
-      render: (item: BookingWithRelations) => (
-        <span style={{ 
-          padding: '4px 8px', 
-          borderRadius: '12px', 
-          fontSize: '12px',
-          fontWeight: 'bold',
-          backgroundColor: 
-            item.status === 'confirmed' ? '#e8f5e8' :
-            item.status === 'completed' ? '#e3f2fd' :
-            item.status === 'cancelled' ? '#ffebee' : '#fff3e0',
-          color: 
-            item.status === 'confirmed' ? '#2e7d32' :
-            item.status === 'completed' ? '#1565c0' :
-            item.status === 'cancelled' ? '#c62828' : '#f57c00'
-        }}>
-          {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-        </span>
-      )
+      render: (item: BookingWithRelations) => {
+        const statusClass = item.status === 'confirmed' ? 'booking-status-badge-confirmed' :
+                           item.status === 'completed' ? 'booking-status-badge-completed' :
+                           item.status === 'cancelled' ? 'booking-status-badge-cancelled' : 'booking-status-badge-pending';
+        
+        return (
+          <span className={`booking-status-badge ${statusClass}`}>
+            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+          </span>
+        );
+      }
     },
     {
       header: 'Actions',
       key: 'actions',
       render: (item: BookingWithRelations) => (
         (item.status === 'pending' || item.status === 'confirmed') ? (
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="booking-actions">
             <Button variant="secondary" size="small" onClick={() => handleRescheduleClick(item)}>
               Reschedule
             </Button>
@@ -343,7 +337,7 @@ const CancelReschedule: React.FC = () => {
               variant="text" 
               size="small" 
               onClick={() => handleCancelClick(item)} 
-              style={{ color: '#d32f2f' }}
+              className="cancel-button"
             >
               Cancel
             </Button>
@@ -356,62 +350,74 @@ const CancelReschedule: React.FC = () => {
   ];
 
   return (
-    <>
-      <DashboardHeader title="Manage Your Bookings" />
-      <div className="page-container">
-        <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
-          View your upcoming and past appointments. You can reschedule or cancel active bookings.
-        </p>
-        
-        {bookingsLoading ? (
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <p>Loading your bookings...</p>
+    <div className="dashboard-layout-container">
+      <div className="dashboard-main-content">
+        <div className="dashboard-content-wrapper">
+          <DashboardHeader title="Manage Your Bookings" />
+          
+          <div className="booking-header">
+            <h1 className="page-title">Manage Bookings</h1>
+            <p className="page-subtitle">
+              View your upcoming and past appointments. You can reschedule or cancel active bookings.
+            </p>
           </div>
-        ) : error ? (
-          <div className="auth-error-message" style={{textAlign: 'center'}}>{error}</div>
-        ) : success ? (
-          <div style={{
-            backgroundColor: '#e8f5e8',
-            color: '#2e7d32',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '15px',
-            border: '1px solid #c8e6c9',
-            textAlign: 'center'
-          }}>
-            {success}
-          </div>
-        ) : null}
-        
-        {bookings.length === 0 && !bookingsLoading ? (
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <p>You don't have any bookings yet.</p>
-            <Button 
-              variant="primary" 
-              onClick={() => window.location.href = '/customer/book-appointment'}
-              style={{ marginTop: '10px' }}
-            >
-              Book Your First Appointment
-            </Button>
-          </div>
-        ) : (
-          <Table 
-            data={bookings} 
-            columns={columns} 
-            caption={`Your Bookings (${bookings.length})`}
-          />
-        )}
+          
+          {bookingsLoading ? (
+            <div className="dashboard-loading">
+              <p>Loading your bookings...</p>
+            </div>
+          ) : error ? (
+            <div className="dashboard-error">{error}</div>
+          ) : success ? (
+            <div className="dashboard-success">{success}</div>
+          ) : null}
+          
+          {bookings.length === 0 && !bookingsLoading ? (
+            <div className="empty-booking-state">
+              <p className="empty-message">You don't have any bookings yet.</p>
+              <Button 
+                variant="primary" 
+                onClick={() => window.location.href = '/customer/book-appointment'}
+                className="book-first-button"
+              >
+                Book Your First Appointment
+              </Button>
+            </div>
+          ) : (
+            <div className="upcoming-bookings-section">
+              <div className="section-header">
+                <h2 className="section-title">Your Bookings ({bookings.length})</h2>
+                <div className="section-actions">
+                  <Button 
+                    variant="primary" 
+                    onClick={() => window.location.href = '/customer/book-appointment'}
+                    className="book-new-button"
+                  >
+                    Book New Appointment
+                  </Button>
+                </div>
+              </div>
+              <Table 
+                data={bookings} 
+                columns={columns} 
+                caption={`Showing ${bookings.length} booking${bookings.length !== 1 ? 's' : ''}`}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Cancel Confirmation Modal */}
       <Modal isOpen={isCancelModalOpen} onClose={closeCancelModal} title="Confirm Cancellation">
         {selectedBooking && (
           <>
-            <p>Are you sure you want to cancel your appointment for <strong>{selectedBooking.service_name}</strong> on <strong>{formatDateTime(selectedBooking.booking_date, selectedBooking.booking_time)}</strong>?</p>
-            <p style={{ color: '#666', fontSize: '14px' }}>
+            <p className="modal-description">
+              Are you sure you want to cancel your appointment for <strong>{selectedBooking.service_name}</strong> on <strong>{formatDateTime(selectedBooking.booking_date, selectedBooking.booking_time)}</strong>?
+            </p>
+            <p className="modal-note">
               This action cannot be undone.
             </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
+            <div className="modal-actions">
               <Button variant="secondary" onClick={closeCancelModal} disabled={loading}>
                 No, Keep It
               </Button>
@@ -427,25 +433,19 @@ const CancelReschedule: React.FC = () => {
       <Modal isOpen={isRescheduleModalOpen} onClose={closeRescheduleModal} title="Reschedule Appointment">
         {selectedBooking && (
           <>
-            <p style={{marginBottom: 'var(--spacing-md)'}}>
+            <p className="modal-description">
               Reschedule <strong>{selectedBooking.service_name}</strong> currently on <strong>{formatDateTime(selectedBooking.booking_date, selectedBooking.booking_time)}</strong>.
             </p>
-            <p style={{ 
-              backgroundColor: '#fff3e0', 
-              padding: '12px', 
-              borderRadius: '4px', 
-              marginBottom: '16px',
-              fontSize: '14px',
-              border: '1px solid #ffb74d'
-            }}>
+            <div className="reschedule-note">
               <strong>Note:</strong> After rescheduling, your booking status will change to <strong>pending</strong> and will require admin approval.
-            </p>
-            <form onSubmit={handleConfirmReschedule} className="contact-form">
+            </div>
+            <form onSubmit={handleConfirmReschedule} className="booking-form">
               <div className="form-group">
                 <label htmlFor="reschedule-date">New Date *</label>
                 <input
                   type="date"
                   id="reschedule-date"
+                  className="form-input"
                   value={rescheduleDate}
                   onChange={(e) => handleRescheduleDateChange(e.target.value)}
                   required
@@ -458,6 +458,7 @@ const CancelReschedule: React.FC = () => {
                 <label htmlFor="reschedule-time">New Time *</label>
                 <select
                   id="reschedule-time"
+                  className="form-select"
                   value={rescheduleTime}
                   onChange={(e) => handleRescheduleTimeChange(e.target.value)}
                   required
@@ -475,38 +476,26 @@ const CancelReschedule: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+                <small className="time-slot-note">
                   {rescheduleDate === new Date().toISOString().split('T')[0] 
                     ? `Today's available time slots (current time: ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')})`
                     : 'Business hours: 9:00 AM - 6:00 PM'
                   }
                 </small>
                 {rescheduleDate && getAvailableTimeSlots().length === 0 && (
-                  <small style={{ color: '#d32f2f', marginTop: '4px', display: 'block' }}>
+                  <small className="error-note">
                     No available time slots for the selected date. Please choose another date.
                   </small>
                 )}
               </div>
 
               {rescheduleError && (
-                <div style={{
-                  backgroundColor: '#fee',
-                  border: '1px solid #f5c6cb',
-                  color: '#721c24',
-                  padding: '12px',
-                  borderRadius: '4px',
-                  marginBottom: '16px'
-                }}>
+                <div className="form-error">
                   {rescheduleError}
                 </div>
               )}
 
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                gap: 'var(--spacing-md)', 
-                marginTop: 'var(--spacing-lg)' 
-              }}>
+              <div className="modal-actions">
                 <Button variant="secondary" onClick={closeRescheduleModal} disabled={loading}>
                   Cancel
                 </Button>
@@ -518,7 +507,7 @@ const CancelReschedule: React.FC = () => {
           </>
         )}
       </Modal>
-    </>
+    </div>
   );
 };
 

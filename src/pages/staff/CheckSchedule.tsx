@@ -8,6 +8,7 @@ import { formatCurrency, formatDate } from '@utils/helpers';
 import { useAuth } from '@context/AuthContext';
 import { supabase } from '../../supabaseClient';
 import { SupabaseNotificationService } from '../../services/supabaseNotificationService';
+import "../../assets/styles/staffdashboards.css";
 
 interface BookingWithRelations extends Booking {
   service_name: string;
@@ -29,7 +30,6 @@ const CheckSchedule: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Safe customer details fetch with fallback
   const fetchCustomerDetails = async (customerIds: string[]) => {
     try {
       const { data, error } = await supabase
@@ -78,7 +78,6 @@ const CheckSchedule: React.FC = () => {
     }
   };
 
-  // Fetch staff bookings from Supabase
   const fetchStaffBookingsSimple = async () => {
     try {
       setLoading(true);
@@ -89,7 +88,6 @@ const CheckSchedule: React.FC = () => {
         return;
       }
 
-      // Simple query without complex joins
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
@@ -102,19 +100,16 @@ const CheckSchedule: React.FC = () => {
         throw error;
       }
 
-      // If we have data, fetch customer details properly
       if (data && data.length > 0) {
         const customerIds = [...new Set(data.map(booking => booking.customer_id))];
         const customersData = await fetchCustomerDetails(customerIds);
 
-        // Fetch service details
         const serviceIds = [...new Set(data.map(booking => booking.service_id))];
         const { data: servicesData } = await supabase
           .from('services')
           .select('*')
           .in('id', serviceIds);
 
-        // Transform the data with proper customer info
         const staffBookings: BookingWithRelations[] = data.map(booking => {
           const service = servicesData?.find(s => s.id === booking.service_id);
           const customer = customersData?.find(c => c.id === booking.customer_id);
@@ -161,7 +156,6 @@ const CheckSchedule: React.FC = () => {
     fetchStaffBookingsSimple();
   }, [user, selectedDate]);
 
-  // Update booking status
   const updateBookingStatus = async (bookingId: string, newStatus: BookingStatus) => {
     try {
       setError(null);
@@ -178,7 +172,6 @@ const CheckSchedule: React.FC = () => {
 
       if (error) throw error;
 
-      // ✅ NOTIFICATION TRIGGERS - With error handling
       let notificationSent = false;
       try {
         if (newStatus === 'confirmed') {
@@ -193,13 +186,10 @@ const CheckSchedule: React.FC = () => {
         }
       } catch (notificationError) {
         console.error('Notification failed, but booking was updated:', notificationError);
-        // Continue even if notification fails
       }
 
-      // Refresh the bookings list
       await fetchStaffBookingsSimple();
       
-      // Show success message
       const successMessage = notificationSent
         ? `Booking status updated to ${newStatus}! Customer notified.`
         : `Booking status updated to ${newStatus}!`;
@@ -211,7 +201,6 @@ const CheckSchedule: React.FC = () => {
     }
   };
 
-  // Format time for display
   const formatTime = (time: string) => {
     if (!time) return 'N/A';
     
@@ -223,7 +212,6 @@ const CheckSchedule: React.FC = () => {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  // Calculate end time based on service duration
   const calculateEndTime = (startTime: string, duration: number) => {
     if (!startTime) return 'N/A';
     
@@ -247,8 +235,8 @@ const CheckSchedule: React.FC = () => {
       key: 'booking_time', 
       render: (item: BookingWithRelations) => (
         <div>
-          <div style={{ fontWeight: '500' }}>{formatTime(item.booking_time)}</div>
-          <div style={{ fontSize: '0.875rem', color: '#666' }}>
+          <div className="time-slot">{formatTime(item.booking_time)}</div>
+          <div className="time-end">
             to {calculateEndTime(item.booking_time, item.service_duration)}
           </div>
         </div>
@@ -264,8 +252,8 @@ const CheckSchedule: React.FC = () => {
       key: 'customerName',
       render: (item: BookingWithRelations) => (
         <div>
-          <div style={{ fontWeight: '500' }}>{item.customer_name}</div>
-          <div style={{ fontSize: '0.875rem', color: '#666' }}>
+          <div className="customer-name">{item.customer_name}</div>
+          <div className="customer-email">
             ✉️ {item.customer_email}
           </div>
         </div>
@@ -284,37 +272,30 @@ const CheckSchedule: React.FC = () => {
     { 
       header: 'Status', 
       key: 'status',
-      render: (item: BookingWithRelations) => (
-        <span style={{ 
-          padding: '4px 8px', 
-          borderRadius: '12px', 
-          fontSize: '12px',
-          fontWeight: 'bold',
-          backgroundColor: 
-            item.status === 'confirmed' ? '#e8f5e8' :
-            item.status === 'completed' ? '#e3f2fd' :
-            item.status === 'cancelled' ? '#ffebee' : '#fff3e0',
-          color: 
-            item.status === 'confirmed' ? '#2e7d32' :
-            item.status === 'completed' ? '#1565c0' :
-            item.status === 'cancelled' ? '#c62828' : '#f57c00'
-        }}>
-          {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-        </span>
-      )
+      render: (item: BookingWithRelations) => {
+        const statusClass = item.status === 'confirmed' ? 'booking-status-badge-confirmed' :
+                           item.status === 'completed' ? 'booking-status-badge-completed' :
+                           item.status === 'cancelled' ? 'booking-status-badge-cancelled' : 'booking-status-badge-pending';
+        
+        return (
+          <span className={`booking-status-badge ${statusClass}`}>
+            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+          </span>
+        );
+      }
     },
     {
       header: 'Actions',
       key: 'actions',
       render: (item: BookingWithRelations) => (
-        <div style={{ display: 'flex', gap: '4px', flexDirection: 'column' }}>
+        <div className="schedule-actions">
           {(item.status === 'pending' || item.status === 'confirmed') && (
             <>
               <Button 
                 variant="secondary" 
                 size="small"
                 onClick={() => updateBookingStatus(item.id, 'completed')}
-                style={{ fontSize: '12px', padding: '4px 8px' }}
+                className="complete-button"
               >
                 Mark Complete
               </Button>
@@ -322,207 +303,149 @@ const CheckSchedule: React.FC = () => {
                 variant="text" 
                 size="small"
                 onClick={() => updateBookingStatus(item.id, 'cancelled')}
-                style={{ fontSize: '12px', padding: '4px 8px', color: '#d32f2f' }}
+                className="cancel-button"
               >
                 Cancel
               </Button>
             </>
           )}
           {item.status === 'completed' && (
-            <span style={{ color: '#666', fontStyle: 'italic', fontSize: '12px' }}>
-              Completed
-            </span>
+            <span className="completed-label">Completed</span>
           )}
           {item.status === 'cancelled' && (
-            <span style={{ color: '#666', fontStyle: 'italic', fontSize: '12px' }}>
-              Cancelled
-            </span>
+            <span className="cancelled-label">Cancelled</span>
           )}
         </div>
       )
     },
   ];
 
-  // Quick stats for the day
   const confirmedBookings = bookings.filter(b => b.status === 'confirmed').length;
   const pendingBookings = bookings.filter(b => b.status === 'pending').length;
   const completedBookings = bookings.filter(b => b.status === 'completed').length;
 
   return (
-    <>
-      <DashboardHeader title="My Schedule" />
-      <div className="page-container">
-        <p className="section-subtitle" style={{ textAlign: 'left', marginBottom: 'var(--spacing-lg)' }}>
-          View your appointments for the day and manage your schedule.
-        </p>
-
-        {/* Date Selection */}
-        <div style={{ marginBottom: 'var(--spacing-lg)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
-          <label htmlFor="schedule-date" style={{ fontFamily: 'var(--font-family-sans-serif)', fontWeight: 500 }}>Select Date:</label>
-          <input
-            type="date"
-            id="schedule-date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            style={{ 
-              padding: 'var(--spacing-xs) var(--spacing-sm)', 
-              border: '1px solid var(--color-border)', 
-              borderRadius: 'var(--border-radius-sm)',
-              fontFamily: 'var(--font-family-sans-serif)'
-            }}
-          />
-          <Button 
-            variant="secondary" 
-            size="small"
-            onClick={fetchStaffBookingsSimple}
-            disabled={loading}
-          >
-            {loading ? 'Refreshing...' : 'Refresh'}
-          </Button>
-        </div>
-
-        {/* SUCCESS MESSAGE*/}
-        {success && (
-          <div style={{
-            backgroundColor: '#e8f5e8',
-            border: '1px solid #c8e6c9',
-            color: '#2e7d32',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '16px',
-            textAlign: 'center'
-          }}>
-            {success}
+    <div className="dashboard-layout-container">
+      <div className="dashboard-main-content">
+        <div className="dashboard-content-wrapper">
+          <DashboardHeader title="My Schedule" />
+          
+          <div className="booking-header">
+            <h1 className="page-title">My Schedule</h1>
+            <p className="page-subtitle">
+              View your appointments for the day and manage your schedule.
+            </p>
           </div>
-        )}
 
-        {/* Error Message */}
-        {error && (
-          <div style={{
-            backgroundColor: '#fee',
-            border: '1px solid #f5c6cb',
-            color: '#721c24',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '16px'
-          }}>
-            {error}
-            <div style={{ marginTop: '8px', fontSize: '12px' }}>
-              <Button 
-                variant="text" 
-                size="small" 
-                onClick={fetchStaffBookingsSimple}
-                style={{ fontSize: '12px', padding: '2px 6px' }}
-              >
-                Try Again
-              </Button>
+          {/* Date Selection */}
+          <div className="date-selection">
+            <label htmlFor="schedule-date" className="date-label">Select Date:</label>
+            <input
+              type="date"
+              id="schedule-date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="date-input"
+            />
+            <Button 
+              variant="secondary" 
+              size="small"
+              onClick={fetchStaffBookingsSimple}
+              disabled={loading}
+              className="refresh-button"
+            >
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </Button>
+          </div>
+
+          {success && (
+            <div className="dashboard-success">
+              {success}
+            </div>
+          )}
+
+          {error && (
+            <div className="dashboard-error">
+              {error}
+              <div className="error-actions">
+                <Button 
+                  variant="text" 
+                  size="small" 
+                  onClick={fetchStaffBookingsSimple}
+                  className="retry-button"
+                >
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Quick Stats */}
+          <div className="stats-grid">
+            <div className="stat-card pending-card">
+              <p className="stat-number">{pendingBookings}</p>
+              <p className="stat-label">Pending</p>
+            </div>
+            <div className="stat-card confirmed-card">
+              <p className="stat-number">{confirmedBookings}</p>
+              <p className="stat-label">Confirmed</p>
+            </div>
+            <div className="stat-card completed-card">
+              <p className="stat-number">{completedBookings}</p>
+              <p className="stat-label">Completed</p>
+            </div>
+            <div className="stat-card total-card">
+              <p className="stat-number">{bookings.length}</p>
+              <p className="stat-label">Total</p>
             </div>
           </div>
-        )}
 
-        {/* Quick Stats */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
-          gap: 'var(--spacing-md)',
-          marginBottom: 'var(--spacing-lg)'
-        }}>
-          <div style={{
-            padding: 'var(--spacing-md)',
-            backgroundColor: '#fff3e0',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #ffb74d'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#f57c00' }}>
-              {pendingBookings}
-            </h3>
-            <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>Pending</p>
-          </div>
-          <div style={{
-            padding: 'var(--spacing-md)',
-            backgroundColor: '#e8f5e8',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #81c784'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#2e7d32' }}>
-              {confirmedBookings}
-            </h3>
-            <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>Confirmed</p>
-          </div>
-          <div style={{
-            padding: 'var(--spacing-md)',
-            backgroundColor: '#e3f2fd',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #64b5f6'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#1565c0' }}>
-              {completedBookings}
-            </h3>
-            <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>Completed</p>
-          </div>
-          <div style={{
-            padding: 'var(--spacing-md)',
-            backgroundColor: '#f5f5f5',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #e0e0e0'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#333' }}>
-              {bookings.length}
-            </h3>
-            <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>Total</p>
-          </div>
-        </div>
+          {/* Bookings Table */}
+          <div className="upcoming-bookings-section">
+            <div className="section-header">
+              <h2 className="section-title">
+                Schedule for {formatDate(selectedDate)}
+              </h2>
+              <div className="section-actions">
+                <span className="appointment-count">
+                  {bookings.length} appointment{bookings.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+            </div>
 
-        {/* Bookings Table */}
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <p>Loading your schedule...</p>
+            {loading ? (
+              <div className="dashboard-loading">
+                <p>Loading your schedule...</p>
+              </div>
+            ) : bookings.length === 0 ? (
+              <div className="empty-booking-state">
+                <p className="empty-message">No appointments scheduled for {formatDate(selectedDate)}.</p>
+                <p className="empty-subtext">
+                  When customers book appointments and select you as their preferred staff, they will appear here.
+                </p>
+              </div>
+            ) : (
+              <Table 
+                data={bookings} 
+                columns={columns} 
+                caption={`Your Appointments for ${formatDate(selectedDate)}`}
+              />
+            )}
           </div>
-        ) : bookings.length === 0 ? (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: '40px',
-            backgroundColor: '#f9f9f9',
-            borderRadius: 'var(--border-radius)',
-            border: '1px solid #e0e0e0'
-          }}>
-            <p style={{ color: '#666', marginBottom: 'var(--spacing-md)' }}>
-              No appointments scheduled for {formatDate(selectedDate)}.
-            </p>
-            <p style={{ color: '#999', fontSize: '0.875rem' }}>
-              When customers book appointments and select you as their preferred staff, they will appear here.
-            </p>
-          </div>
-        ) : (
-          <Table 
-            data={bookings} 
-            columns={columns} 
-            caption={`Your Appointments for ${formatDate(selectedDate)} - ${bookings.length} booking(s)`}
-          />
-        )}
 
-        {/* Notes Section */}
-        <div style={{ 
-          marginTop: 'var(--spacing-xl)',
-          padding: 'var(--spacing-md)',
-          backgroundColor: '#f0f8ff',
-          borderRadius: 'var(--border-radius)',
-          border: '1px solid #b3d9ff'
-        }}>
-          <h4 style={{ margin: '0 0 8px 0', color: '#0066cc' }}>Schedule Notes</h4>
-          <ul style={{ margin: 0, paddingLeft: '20px', color: '#666', fontSize: '0.875rem' }}>
-            <li>All times are displayed in your local timezone</li>
-            <li>You can mark appointments as completed or cancel them as needed</li>
-            <li>Customers will receive notifications when you update their appointment status</li>
-            <li>Only appointments where customers specifically selected you will appear here</li>
-          </ul>
+          {/* Notes Section */}
+          <div className="info-banner">
+            <h4 className="banner-title">Schedule Notes</h4>
+            <ul className="banner-list">
+              <li>All times are displayed in your local timezone</li>
+              <li>You can mark appointments as completed or cancel them as needed</li>
+              <li>Customers will receive notifications when you update their appointment status</li>
+              <li>Only appointments where customers specifically selected you will appear here</li>
+            </ul>
+          </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

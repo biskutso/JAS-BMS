@@ -7,6 +7,7 @@ import Modal from '@components/common/Modal';
 import { useModal } from '@hooks/useModal';
 import { formatDate } from '@utils/helpers';
 import { supabase } from '../../supabaseClient';
+import "../../assets/styles/dashboards.css";
 
 interface InventoryItem {
   id: string;
@@ -428,39 +429,19 @@ const ManageInventory: React.FC = () => {
     return { status: 'In Stock', color: '#2e7d32', bgColor: '#e8f5e8' };
   };
 
-  // Group transactions by date for the stock tracker view
-  const getStockTrackerData = () => {
-    const stockInData = transactions.filter(t => t.transaction_type === 'in');
-    const stockOutData = transactions.filter(t => t.transaction_type === 'out');
-    
-    // Get all unique dates from transactions
-    const allDates = [...new Set(transactions.map(t => formatDate(t.created_at)))].sort((a, b) => 
-      new Date(b).getTime() - new Date(a).getTime()
-    );
-
-    return allDates.map(date => {
-      const dateInTransactions = stockInData.filter(t => formatDate(t.created_at) === date);
-      const dateOutTransactions = stockOutData.filter(t => formatDate(t.created_at) === date);
-      
-      const maxRows = Math.max(dateInTransactions.length, dateOutTransactions.length);
-      
-      return {
-        date,
-        inRows: dateInTransactions,
-        outRows: dateOutTransactions,
-        maxRows
-      };
-    });
-  };
+  useEffect(() => {
+    fetchInventory();
+    fetchTransactions();
+  }, []);
 
   const inventoryColumns = [
     { 
       header: 'Product Name', 
       key: 'name',
       render: (item: InventoryItem) => (
-        <div>
-          <div style={{ fontWeight: 'bold' }}>{item.name}</div>
-          <div style={{ fontSize: '12px', color: '#666' }}>{item.category}</div>
+        <div className="product-info-container">
+          <div className="product-name">{item.name}</div>
+          <div className="product-category">{item.category}</div>
         </div>
       )
     },
@@ -476,20 +457,14 @@ const ManageInventory: React.FC = () => {
         const status = getStockStatus(item);
         return (
           <div>
-            <div style={{ 
-              display: 'inline-block',
-              padding: '2px 8px',
-              borderRadius: '12px',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              color: status.color,
-              backgroundColor: status.bgColor,
-              marginBottom: '4px'
-            }}>
+            <span className={`stock-status-badge ${
+              item.stock === 0 ? 'stock-status-out' :
+              item.stock <= item.low_stock_alert ? 'stock-status-low' : 'stock-status-good'
+            }`}>
               {item.stock} {item.unit}{item.stock !== 1 ? 's' : ''}
-            </div>
+            </span>
             {item.stock <= item.low_stock_alert && item.stock > 0 && (
-              <div style={{ fontSize: '11px', color: '#ed6c02' }}>
+              <div style={{ fontSize: '11px', color: '#ed6c02', marginTop: '4px' }}>
                 Low stock alert: {item.low_stock_alert}
               </div>
             )}
@@ -501,7 +476,7 @@ const ManageInventory: React.FC = () => {
       header: 'Actions',
       key: 'actions',
       render: (item: InventoryItem) => (
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <div className="inventory-actions">
           <Button 
             variant="text" 
             size="small" 
@@ -569,15 +544,8 @@ const ManageInventory: React.FC = () => {
       render: (item: TransactionHistory) => {
         const typeInfo = getTransactionTypeDisplay(item.transaction_type);
         return (
-          <span style={{
-            padding: '4px 8px',
-            borderRadius: '4px',
-            fontSize: '12px',
-            fontWeight: 'bold',
-            color: typeInfo.color,
-            backgroundColor: typeInfo.bgColor
-          }}>
-            {typeInfo.label}
+          <span className={`transaction-type-badge transaction-type-${item.transaction_type}`}>
+            {item.transaction_type === 'in' ? 'STOCK IN' : 'STOCK OUT'}
           </span>
         );
       }
@@ -606,239 +574,128 @@ const ManageInventory: React.FC = () => {
     },
   ];
 
-  useEffect(() => {
-    fetchInventory();
-    fetchTransactions();
-  }, []);
-
-  const stockTrackerData = getStockTrackerData();
-
   return (
-    <>
-      <DashboardHeader
-        title="Stock In - Out - Balance Tracker"
-        actions={
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <Button variant="secondary" onClick={fetchInventory} disabled={loading}>
-              Refresh
-            </Button>
-            <Button variant="primary" onClick={handleAddClick} disabled={loading}>
-              Add New Product
-            </Button>
-          </div>
-        }
-      />
-      <div className="page-container">
-        <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
-          Track stock movements and current balances for all salon products.
-        </p>
-
-        {successMessage && (
-          <div style={{
-            backgroundColor: '#e8f5e8',
-            color: '#2e7d32',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '15px',
-            border: '1px solid #c8e6c9'
-          }}>
-            {successMessage}
-          </div>
-        )}
+    <div id="inventory-page" className="dashboard-layout-container">
+      <div className="dashboard-main-content">
+        <DashboardHeader title="Stock In - Out - Balance Tracker" />
         
-        {loading && !isOpen && !isStockModalOpen && !isDeleteModalOpen && (
-          <p style={{textAlign: 'center'}}>Loading...</p>
-        )}
-        
-        {error && (
-          <div className="auth-error-message" style={{textAlign: 'left', whiteSpace: 'pre-wrap'}}>
-            {error}
-          </div>
-        )}
+        <div className="dashboard-content-wrapper">
+          <p className="section-subtitle">
+            Track stock movements and current balances for all salon products.
+          </p>
 
-        {/* Tab Navigation */}
-        <div style={{ marginBottom: '20px', borderBottom: '1px solid #e0e0e0' }}>
-          <div style={{ display: 'flex', gap: '0' }}>
-            <button
-              onClick={() => setActiveTab('inventory')}
-              style={{
-                padding: '12px 24px',
-                border: 'none',
-                backgroundColor: activeTab === 'inventory' ? '#1976d2' : 'transparent',
-                color: activeTab === 'inventory' ? 'white' : '#666',
-                cursor: 'pointer',
-                borderBottom: activeTab === 'inventory' ? '2px solid #1976d2' : 'none'
-              }}
-            >
-              Current Stock Balance
-            </button>
-            <button
-              onClick={() => setActiveTab('transactions')}
-              style={{
-                padding: '12px 24px',
-                border: 'none',
-                backgroundColor: activeTab === 'transactions' ? '#1976d2' : 'transparent',
-                color: activeTab === 'transactions' ? 'white' : '#666',
-                cursor: 'pointer',
-                borderBottom: activeTab === 'transactions' ? '2px solid #1976d2' : 'none'
-              }}
-            >
-              Stock In/Out History
-            </button>
-          </div>
-        </div>
-
-        {activeTab === 'inventory' ? (
-          <div>
-            <h3 style={{ marginBottom: '15px', color: '#333' }}>Current Stock Balance</h3>
-            <Table 
-              data={products} 
-              columns={inventoryColumns} 
-              emptyMessage="No products found. Add your first product to get started."
-            />
-          </div>
-        ) : (
-          <div>
-            <h3 style={{ marginBottom: '15px', color: '#333' }}>Stock In/Out History</h3>
-            
-            {/* Stock Tracker Table */}
-            <div style={{ 
-              backgroundColor: 'white', 
-              border: '1px solid #e0e0e0',
-              borderRadius: '8px',
-              overflow: 'hidden',
-              marginBottom: '20px'
-            }}>
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: '1fr 1fr 1fr',
-                borderBottom: '2px solid #1976d2'
-              }}>
-                <div style={{ padding: '12px', fontWeight: 'bold', backgroundColor: '#f8f9fa', borderRight: '1px solid #e0e0e0' }}>
-                  Stock In
-                </div>
-                <div style={{ padding: '12px', fontWeight: 'bold', backgroundColor: '#f8f9fa', borderRight: '1px solid #e0e0e0' }}>
-                  Stock Out
-                </div>
-                <div style={{ padding: '12px', fontWeight: 'bold', backgroundColor: '#f8f9fa' }}>
-                  Stock Balance
-                </div>
+          {successMessage && (
+            <div className="inventory-success-message">
+              {successMessage}
+            </div>
+          )}
+          
+          {loading && !isOpen && !isStockModalOpen && !isDeleteModalOpen && (
+            <div className="dashboard-loading">
+              <p>Loading...</p>
+            </div>
+          )}
+          
+          {error && (
+            <div className="dashboard-error">
+              {error}
+              <div className="dashboard-error-actions">
+                <Button 
+                  variant="text" 
+                  size="small" 
+                  onClick={fetchInventory}
+                  style={{ fontSize: '14px' }}
+                >
+                  Try Again
+                </Button>
               </div>
+            </div>
+          )}
 
-              {/* Header Row */}
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: '1fr 1fr 1fr',
-                borderBottom: '1px solid #e0e0e0',
-                backgroundColor: '#f5f5f5'
-              }}>
-                <div style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: '1fr 1fr',
-                  borderRight: '1px solid #e0e0e0'
-                }}>
-                  <div style={{ padding: '8px', borderRight: '1px solid #e0e0e0', fontSize: '14px', fontWeight: '600' }}>Date</div>
-                  <div style={{ padding: '8px', fontSize: '14px', fontWeight: '600' }}>Item Name</div>
-                </div>
-                <div style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: '1fr 1fr',
-                  borderRight: '1px solid #e0e0e0'
-                }}>
-                  <div style={{ padding: '8px', borderRight: '1px solid #e0e0e0', fontSize: '14px', fontWeight: '600' }}>Date</div>
-                  <div style={{ padding: '8px', fontSize: '14px', fontWeight: '600' }}>Item Name</div>
-                </div>
-                <div style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: '1fr 1fr'
-                }}>
-                  <div style={{ padding: '8px', borderRight: '1px solid #e0e0e0', fontSize: '14px', fontWeight: '600' }}>Item Name</div>
-                  <div style={{ padding: '8px', fontSize: '14px', fontWeight: '600' }}>Balance Quantity</div>
-                </div>
+          {/* Tab Navigation with Action Buttons */}
+          <div className="inventory-tabs-container">
+            <div className="inventory-tabs">
+              <div className="inventory-tab-nav">
+                <button
+                  onClick={() => setActiveTab('inventory')}
+                  className={`inventory-tab-button ${activeTab === 'inventory' ? 'active' : ''}`}
+                >
+                  Current Stock Balance
+                </button>
+                <button
+                  onClick={() => setActiveTab('transactions')}
+                  className={`inventory-tab-button ${activeTab === 'transactions' ? 'active' : ''}`}
+                >
+                  Stock In/Out History
+                </button>
               </div>
-
-              {/* Data Rows */}
-              {stockTrackerData.length > 0 ? stockTrackerData.map((dateGroup, index) => (
-                <div key={index}>
-                  {Array.from({ length: dateGroup.maxRows }).map((_, rowIndex) => (
-                    <div key={rowIndex} style={{ 
-                      display: 'grid', 
-                      gridTemplateColumns: '1fr 1fr 1fr',
-                      borderBottom: rowIndex === dateGroup.maxRows - 1 ? '2px solid #666' : '1px solid #e0e0e0'
-                    }}>
-                      {/* Stock In Column */}
-                      <div style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: '1fr 1fr',
-                        borderRight: '1px solid #e0e0e0'
-                      }}>
-                        <div style={{ padding: '8px', borderRight: '1px solid #e0e0e0' }}>
-                          {dateGroup.inRows[rowIndex] ? formatDate(dateGroup.inRows[rowIndex].created_at) : ''}
-                        </div>
-                        <div style={{ padding: '8px' }}>
-                          {dateGroup.inRows[rowIndex] ? (
-                            <div>
-                              <div>{dateGroup.inRows[rowIndex].product_name}</div>
-                              <div style={{ fontSize: '12px', color: '#2e7d32', fontWeight: 'bold' }}>
-                                +{dateGroup.inRows[rowIndex].quantity}
-                              </div>
-                            </div>
-                          ) : ''}
-                        </div>
-                      </div>
-
-                      {/* Stock Out Column */}
-                      <div style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: '1fr 1fr',
-                        borderRight: '1px solid #e0e0e0'
-                      }}>
-                        <div style={{ padding: '8px', borderRight: '1px solid #e0e0e0' }}>
-                          {dateGroup.outRows[rowIndex] ? formatDate(dateGroup.outRows[rowIndex].created_at) : ''}
-                        </div>
-                        <div style={{ padding: '8px' }}>
-                          {dateGroup.outRows[rowIndex] ? (
-                            <div>
-                              <div>{dateGroup.outRows[rowIndex].product_name}</div>
-                              <div style={{ fontSize: '12px', color: '#d32f2f', fontWeight: 'bold' }}>
-                                -{dateGroup.outRows[rowIndex].quantity}
-                              </div>
-                            </div>
-                          ) : ''}
-                        </div>
-                      </div>
-
-                      {/* Stock Balance Column */}
-                      <div style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: '1fr 1fr'
-                      }}>
-                        <div style={{ padding: '8px', borderRight: '1px solid #e0e0e0' }}>
-                          {products[rowIndex]?.name || ''}
-                        </div>
-                        <div style={{ padding: '8px' }}>
-                          {products[rowIndex] ? (
-                            <div style={{ 
-                              color: products[rowIndex].stock === 0 ? '#d32f2f' : 
-                                     products[rowIndex].stock <= products[rowIndex].low_stock_alert ? '#ed6c02' : '#2e7d32',
-                              fontWeight: 'bold'
-                            }}>
-                              {products[rowIndex].stock} {products[rowIndex].unit}
-                            </div>
-                          ) : ''}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )) : (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
-                  No stock transactions found. Stock movements will appear here.
-                </div>
-              )}
+              
+              <div className="inventory-action-buttons">
+                <Button 
+                  variant="secondary" 
+                  onClick={fetchInventory} 
+                  disabled={loading}
+                  size="small"
+                  style={{ marginRight: '8px' }}
+                >
+                  Refresh
+                </Button>
+                <Button 
+                  variant="primary" 
+                  onClick={handleAddClick} 
+                  disabled={loading}
+                  size="small"
+                >
+                  Add New Product
+                </Button>
+              </div>
             </div>
           </div>
-        )}
+
+          {activeTab === 'inventory' ? (
+            <div className="inventory-content">
+              <div className="inventory-table-container">
+                {products.length > 0 ? (
+                  <Table 
+                    data={products} 
+                    columns={inventoryColumns} 
+                    emptyMessage="No products found. Add your first product to get started."
+                  />
+                ) : (
+                  <div className="dashboard-empty-state">
+                    <p className="empty-state-message">
+                      No products found.
+                    </p>
+                    <p className="empty-state-subtext">
+                      Add your first product to get started.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="inventory-content">
+              <div className="transactions-table-container">
+                {transactions.length > 0 ? (
+                  <Table 
+                    data={transactions} 
+                    columns={transactionColumns} 
+                    emptyMessage="No stock transactions found."
+                  />
+                ) : (
+                  <div className="dashboard-empty-state">
+                    <p className="empty-state-message">
+                      No stock transactions found.
+                    </p>
+                    <p className="empty-state-subtext">
+                      Stock movements will appear here.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Product Add/Edit Modal */}
@@ -873,7 +730,7 @@ const ManageInventory: React.FC = () => {
             </select>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+          <div className="form-group-row">
             <div className="form-group">
               <label htmlFor="unit">Unit *</label>
               <select 
@@ -918,12 +775,7 @@ const ManageInventory: React.FC = () => {
 
           {error && <p className="auth-error-message">{error}</p>}
           
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'flex-end', 
-            gap: 'var(--spacing-md)', 
-            marginTop: 'var(--spacing-lg)' 
-          }}>
+          <div className="modal-actions">
             <Button variant="secondary" onClick={closeModal} disabled={loading}>
               Cancel
             </Button>
@@ -953,12 +805,7 @@ const ManageInventory: React.FC = () => {
           </div>
 
           {selectedProduct && (
-            <div style={{ 
-              backgroundColor: '#f5f5f5', 
-              padding: '12px', 
-              borderRadius: '4px',
-              marginBottom: '15px'
-            }}>
+            <div className="stock-info-box">
               <p><strong>Current Stock:</strong> {selectedProduct.stock} {selectedProduct.unit}{selectedProduct.stock !== 1 ? 's' : ''}</p>
               <p><strong>After {getStockActionLabel(stockFormData.type).toLowerCase()}:</strong> {
                 stockFormData.type === 'in' 
@@ -970,12 +817,7 @@ const ManageInventory: React.FC = () => {
 
           {error && <p className="auth-error-message">{error}</p>}
           
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'flex-end', 
-            gap: 'var(--spacing-md)', 
-            marginTop: 'var(--spacing-lg)' 
-          }}>
+          <div className="modal-actions">
             <Button variant="secondary" onClick={closeStockModal} disabled={loading}>
               Cancel
             </Button>
@@ -997,21 +839,16 @@ const ManageInventory: React.FC = () => {
       {/* Delete Confirmation Modal */}
       <Modal isOpen={isDeleteModalOpen} onClose={closeDeleteModal} title="Confirm Delete">
         <div>
-          <p style={{ marginBottom: '20px', fontSize: '16px' }}>
+          <p className="delete-confirm-text">
             Are you sure you want to delete <strong>"{productToDelete?.name}"</strong>?
           </p>
-          <p style={{ marginBottom: '20px', color: '#666', fontSize: '14px' }}>
+          <p className="delete-confirm-subtext">
             This action cannot be undone. All stock transactions for this product will also be deleted.
           </p>
           
           {error && <p className="auth-error-message">{error}</p>}
           
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'flex-end', 
-            gap: 'var(--spacing-md)', 
-            marginTop: 'var(--spacing-lg)' 
-          }}>
+          <div className="modal-actions">
             <Button variant="secondary" onClick={closeDeleteModal} disabled={loading}>
               Cancel
             </Button>
@@ -1029,7 +866,7 @@ const ManageInventory: React.FC = () => {
           </div>
         </div>
       </Modal>
-    </>
+    </div>
   );
 };
 

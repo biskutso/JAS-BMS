@@ -224,226 +224,144 @@ const GenerateReports: React.FC = () => {
   };
 
   return (
-    <>
-      <DashboardHeader title="Generate Reports" />
-      <div className="page-container">
-        <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
-          Access insights into your business performance, revenue, and service popularity.
-        </p>
-
-        {/* Database Info */}
-        <div style={{ 
-          backgroundColor: '#f0f8ff', 
-          border: '1px solid #b3d9ff',
-          borderRadius: 'var(--border-radius-sm)',
-          padding: 'var(--spacing-md)',
-          marginBottom: 'var(--spacing-lg)',
-          fontSize: '0.9rem'
-        }}>
-          <p style={{ margin: 0, color: '#0066cc' }}>
-            <strong>Database Info:</strong> Using your actual booking data. Make sure you have:
+    <div className="dashboard-layout-container">
+      <div className="dashboard-main-content">
+        <DashboardHeader title="Generate Reports" />
+        
+        <div className="dashboard-content-wrapper">
+          <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
+            Access insights into your business performance, revenue, and service popularity.
           </p>
-          <ul style={{ margin: 'var(--spacing-xs) 0', paddingLeft: 'var(--spacing-lg)' }}>
-            <li>Completed bookings in the 'bookings' table</li>
-            <li>Service information in the 'services' table</li>
-            <li>Proper status fields and pricing data</li>
-          </ul>
-        </div>
 
-        <div style={{ 
-          marginBottom: 'var(--spacing-xl)', 
-          display: 'flex', 
-          gap: 'var(--spacing-md)', 
-          alignItems: 'center',
-          flexWrap: 'wrap'
-        }}>
-          <label htmlFor="report-type" style={{ fontFamily: 'var(--font-family-sans-serif)', fontWeight: 500 }}>Report Period:</label>
-          <select
-            id="report-type"
-            value={reportType}
-            onChange={(e) => setReportType(e.target.value as 'daily' | 'monthly' | 'yearly')}
-            style={{ 
-              padding: 'var(--spacing-xs)', 
-              border: '1px solid var(--color-border)', 
-              borderRadius: 'var(--border-radius-sm)', 
-              minWidth: '150px' 
-            }}
-          >
-            <option value="daily">Daily</option>
-            <option value="monthly">Monthly</option>
-            <option value="yearly">Yearly</option>
-          </select>
-          <Button variant="primary" onClick={handleGenerateReport} disabled={loading}>
-            {loading ? 'Generating...' : 'Generate Report'}
-          </Button>
-          {reportData && (
-            <Button variant="secondary" onClick={handleExportCSV}>
-              Export CSV
-            </Button>
-          )}
-        </div>
-
-        {error && (
-          <div className="auth-error-message" style={{ marginBottom: 'var(--spacing-md)', whiteSpace: 'pre-wrap' }}>
-            {error}
+          {/* Database Info */}
+          <div className="info-banner">
+            <p style={{ margin: 0, color: '#0066cc' }}>
+              <strong>Database Info:</strong> Using your actual booking data. Make sure you have:
+            </p>
+            <ul style={{ margin: 'var(--spacing-xs) 0', paddingLeft: 'var(--spacing-lg)' }}>
+              <li>Completed bookings in the 'bookings' table</li>
+              <li>Service information in the 'services' table</li>
+              <li>Proper status fields and pricing data</li>
+            </ul>
           </div>
-        )}
 
-        {reportData && (
-          <div style={{ 
-            backgroundColor: 'var(--color-background)', 
-            padding: 'var(--spacing-lg)', 
-            borderRadius: 'var(--border-radius-md)', 
-            boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
-            border: '1px solid var(--color-border)'
-          }}>
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              marginBottom: 'var(--spacing-lg)' 
-            }}>
-              <h3 style={{ 
-                fontFamily: 'var(--font-family-serif)', 
-                fontSize: '2rem', 
-                margin: 0 
-              }}>
-                {reportType.charAt(0).toUpperCase() + reportType.slice(1)} Performance Report
-              </h3>
-              <span style={{ 
-                color: 'var(--color-text-light)', 
-                fontSize: '0.9rem' 
-              }}>
-                {reportData.dateRange}
-              </span>
-            </div>
-
-            {/* Key Metrics */}
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-              gap: 'var(--spacing-lg)', 
-              marginBottom: 'var(--spacing-xl)' 
-            }}>
-              <div style={{ 
-                border: '1px solid var(--color-border)', 
-                borderRadius: 'var(--border-radius-sm)', 
-                padding: 'var(--spacing-md)', 
-                textAlign: 'center',
-                backgroundColor: 'white'
-              }}>
-                <p style={{ fontSize: '1.2rem', color: 'var(--color-text-light)', margin: '0 0 var(--spacing-xs) 0' }}>Total Revenue</p>
-                <p style={{ fontSize: '2.5rem', fontFamily: 'var(--font-family-serif)', color: 'var(--color-accent)', margin: 0 }}>
-                  {formatCurrency(reportData.totalRevenue)}
-                </p>
-              </div>
-              <div style={{ 
-                border: '1px solid var(--color-border)', 
-                borderRadius: 'var(--border-radius-sm)', 
-                padding: 'var(--spacing-md)', 
-                textAlign: 'center',
-                backgroundColor: 'white'
-              }}>
-                <p style={{ fontSize: '1.2rem', color: 'var(--color-text-light)', margin: '0 0 var(--spacing-xs) 0' }}>Bookings Completed</p>
-                <p style={{ fontSize: '2.5rem', fontFamily: 'var(--font-family-serif)', color: 'var(--color-primary-dark)', margin: 0 }}>
-                  {reportData.bookingsCompleted}
-                </p>
-              </div>
-              <div style={{ 
-                border: '1px solid var(--color-border)', 
-                borderRadius: 'var(--border-radius-sm)', 
-                padding: 'var(--spacing-md)', 
-                textAlign: 'center',
-                backgroundColor: 'white'
-              }}>
-                <p style={{ fontSize: '1.2rem', color: 'var(--color-text-light)', margin: '0 0 var(--spacing-xs) 0' }}>Customers Served</p>
-                <p style={{ fontSize: '2.5rem', fontFamily: 'var(--font-family-serif)', color: 'var(--color-primary-dark)', margin: 0 }}>
-                  {reportData.customersServed}
-                </p>
+          {/* Report Controls */}
+          <div className="report-controls-container">
+            <div className="report-controls">
+              <label htmlFor="report-type" className="control-label">Report Period:</label>
+              <select
+                id="report-type"
+                value={reportType}
+                onChange={(e) => setReportType(e.target.value as 'daily' | 'monthly' | 'yearly')}
+                className="report-select"
+                disabled={loading}
+              >
+                <option value="daily">Daily</option>
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
+              </select>
+              <div className="report-buttons">
+                <Button 
+                  variant="primary" 
+                  onClick={handleGenerateReport} 
+                  disabled={loading}
+                  className="generate-button"
+                >
+                  {loading ? 'Generating...' : 'Generate Report'}
+                </Button>
+                {reportData && (
+                  <Button variant="secondary" onClick={handleExportCSV} className="export-button">
+                    Export CSV
+                  </Button>
+                )}
               </div>
             </div>
+          </div>
 
-            {/* Revenue by Service */}
-            {reportData.revenueByService.length > 0 && (
-              <>
-                <h4 style={{ 
-                  fontFamily: 'var(--font-family-serif)', 
-                  fontSize: '1.5rem', 
-                  marginBottom: 'var(--spacing-md)',
-                  borderBottom: '2px solid var(--color-border)',
-                  paddingBottom: 'var(--spacing-xs)'
-                }}>
-                  Revenue by Service
-                </h4>
-                <ul style={{ listStyle: 'none', padding: 0, marginBottom: 'var(--spacing-lg)' }}>
-                  {reportData.revenueByService.map((item, index) => (
-                    <li key={index} style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      padding: 'var(--spacing-sm) 0', 
-                      borderBottom: '1px dashed var(--color-border)',
-                      alignItems: 'center'
-                    }}>
-                      <span style={{ flex: 1 }}>{item.service}</span>
-                      <span style={{ 
-                        fontWeight: 'bold', 
-                        color: 'var(--color-accent)',
-                        minWidth: '100px',
-                        textAlign: 'right'
-                      }}>
-                        {formatCurrency(item.revenue)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+          {error && (
+            <div className="dashboard-error">
+              {error}
+            </div>
+          )}
 
-            {/* Popular Service */}
-            <div style={{ 
-              textAlign: 'center', 
-              padding: 'var(--spacing-md)', 
-              backgroundColor: 'var(--color-background-alt)',
-              borderRadius: 'var(--border-radius-sm)',
-              border: '1px solid var(--color-border)'
-            }}>
-              <p style={{ margin: 0, color: 'var(--color-text-light)' }}>
-                Most Popular Service: <strong style={{ color: 'var(--color-primary-dark)' }}>{reportData.popularService.name}</strong> 
-                {' '}({reportData.popularService.count} {reportData.popularService.count === 1 ? 'booking' : 'bookings'})
+          {reportData && (
+            <div className="report-results-container">
+              <div className="report-header">
+                <h3 className="report-title">
+                  {reportType.charAt(0).toUpperCase() + reportType.slice(1)} Performance Report
+                </h3>
+                <span className="report-date-range">
+                  {reportData.dateRange}
+                </span>
+              </div>
+
+              {/* Key Metrics */}
+              <div className="metrics-grid">
+                <div className="metric-card">
+                  <p className="metric-label">Total Revenue</p>
+                  <p className="metric-value">
+                    {formatCurrency(reportData.totalRevenue)}
+                  </p>
+                </div>
+                <div className="metric-card">
+                  <p className="metric-label">Bookings Completed</p>
+                  <p className="metric-value">
+                    {reportData.bookingsCompleted}
+                  </p>
+                </div>
+                <div className="metric-card">
+                  <p className="metric-label">Customers Served</p>
+                  <p className="metric-value">
+                    {reportData.customersServed}
+                  </p>
+                </div>
+              </div>
+
+              {/* Revenue by Service */}
+              {reportData.revenueByService.length > 0 && (
+                <div className="revenue-section">
+                  <h4 className="section-title">
+                    Revenue by Service
+                  </h4>
+                  <div className="revenue-list">
+                    {reportData.revenueByService.map((item, index) => (
+                      <div key={index} className="revenue-item">
+                        <span className="service-name">{item.service}</span>
+                        <span className="service-revenue">
+                          {formatCurrency(item.revenue)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Popular Service */}
+              <div className="popular-service-card">
+                <p className="popular-service-text">
+                  Most Popular Service: <strong>{reportData.popularService.name}</strong> 
+                  {' '}({reportData.popularService.count} {reportData.popularService.count === 1 ? 'booking' : 'bookings'})
+                </p>
+              </div>
+
+              {/* Report Summary */}
+              <div className="report-footer">
+                Report generated on {new Date().toLocaleString()}
+              </div>
+            </div>
+          )}
+
+          {!reportData && !loading && (
+            <div className="empty-report-state">
+              <p>Select a report period and click "Generate Report" to view your business insights.</p>
+              <p className="empty-report-subtext">
+                The report will show completed bookings data from your database.
               </p>
             </div>
-
-            {/* Report Summary */}
-            <div style={{ 
-              marginTop: 'var(--spacing-lg)', 
-              padding: 'var(--spacing-md)', 
-              backgroundColor: 'var(--color-background)',
-              borderRadius: 'var(--border-radius-sm)',
-              fontSize: '0.9rem',
-              color: 'var(--color-text-light)',
-              textAlign: 'center'
-            }}>
-              Report generated on {new Date().toLocaleString()}
-            </div>
-          </div>
-        )}
-
-        {!reportData && !loading && (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: 'var(--spacing-xl)', 
-            color: 'var(--color-text-light)',
-            border: '2px dashed var(--color-border)',
-            borderRadius: 'var(--border-radius-md)'
-          }}>
-            <p>Select a report period and click "Generate Report" to view your business insights.</p>
-            <p style={{ fontSize: '0.9rem', marginTop: 'var(--spacing-sm)' }}>
-              The report will show completed bookings data from your database.
-            </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 };
 

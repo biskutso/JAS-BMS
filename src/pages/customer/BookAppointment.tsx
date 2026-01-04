@@ -6,6 +6,7 @@ import { Service } from '@models/service';
 import { useAuth } from '@context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
+import '../../assets/styles/customerdashboards.css';
 
 // ✅ Helper: Format prices in PHP currency
 const formatCurrency = (amount: number) =>
@@ -334,266 +335,249 @@ const BookAppointment: React.FC = () => {
   const availableTimeSlots = getAvailableTimeSlots();
 
   return (
-    <>
-      <DashboardHeader title="Book a New Appointment" />
-      <div className="page-container">
-        <p className="section-subtitle" style={{ textAlign: 'left', marginBottom: 'var(--spacing-lg)' }}>
-          Choose your desired service, preferred staff member, date, and time to schedule your next visit.
-        </p>
-
-        {/* Show preselected service notification */}
-        {preselectedService && selectedService && (
-          <div style={{
-            backgroundColor: '#e8f5e8',
-            border: '1px solid #c8e6c9',
-            color: '#2e7d32',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '16px',
-            textAlign: 'center'
-          }}>
-            <strong>Service Pre-selected:</strong> {preselectedService.name} has been automatically selected for you.
-          </div>
-        )}
+    <div className="dashboard-layout-container">
+      <div className="dashboard-main-content">
+        <DashboardHeader title="Book a New Appointment" />
         
-        {(servicesLoading || staffLoading) ? (
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <p>Loading available options...</p>
+        <div className="dashboard-content-wrapper">
+          <div className="booking-header">
+            <h1 className="page-title">Schedule Your Appointment</h1>
+            <p className="page-subtitle">
+              Choose your desired service, preferred staff member, date, and time to schedule your next visit.
+            </p>
           </div>
-        ) : services.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <p>No services available at the moment. Please check back later.</p>
-            <Button variant="secondary" onClick={fetchServices} style={{ marginTop: '10px' }}>
-              Retry Loading Services
-            </Button>
-          </div>
-        ) : staffMembers.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <p>No staff members available at the moment. Please check back later.</p>
-          </div>
-        ) : (
-          <div className="contact-form-container">
-            <form className="contact-form" onSubmit={handleSubmit}>
-              {/* Service Selection */}
-              <div className="form-group">
-                <label htmlFor="service">Select Service *</label>
-                <select
-                  id="service"
-                  value={selectedServiceId}
-                  onChange={(e) => handleServiceChange(e.target.value)}
-                  required
-                >
-                  <option value="">-- Choose a Service --</option>
-                  {services.map(service => (
-                    <option key={service.id} value={service.id}>
-                      {service.name} - {formatCurrency(service.price)} ({service.durationMinutes} min)
-                    </option>
-                  ))}
-                </select>
-                <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
-                  {services.length} services available
-                  {preselectedService && selectedService && ` • "${preselectedService.name}" is pre-selected`}
-                </small>
-              </div>
 
-              {/* Service Details Display */}
-              {selectedService && (
-                <div style={{
-                  backgroundColor: '#f8f9fa',
-                  padding: '16px',
-                  borderRadius: '8px',
-                  marginBottom: '20px',
-                  border: '1px solid #e9ecef'
-                }}>
-                  <h4 style={{ margin: '0 0 8px 0', color: '#2c5530' }}>
-                    {selectedService.name}
-                  </h4>
-                  <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '14px' }}>
-                    {selectedService.description}
-                  </p>
-                  <div style={{ display: 'flex', gap: '16px', fontSize: '14px' }}>
-                    <span style={{ color: '#2c5530', fontWeight: 'bold' }}>
-                      Price: {formatCurrency(selectedService.price)}
-                    </span>
-                    <span style={{ color: '#666' }}>
-                      Duration: {selectedService.durationMinutes} minutes
-                    </span>
-                    <span style={{ color: '#666', textTransform: 'capitalize' }}>
-                      Category: {selectedService.category}
-                    </span>
-                  </div>
-                </div>
-              )}
+          {/* Show preselected service notification */}
+          {preselectedService && selectedService && (
+            <div className="preselected-notification">
+              <strong>Service Pre-selected:</strong> {preselectedService.name} has been automatically selected for you.
+            </div>
+          )}
 
-              {/* Staff Selection */}
-              <div className="form-group">
-                <label htmlFor="staff">Select Preferred Staff *</label>
-                <select
-                  id="staff"
-                  value={selectedStaffId}
-                  onChange={(e) => setSelectedStaffId(e.target.value)}
-                  required
-                  disabled={!selectedServiceId}
-                >
-                  <option value="">-- {selectedServiceId ? 'Choose a Staff Member' : 'Select a service first'} --</option>
-                  {specializedStaff.map(staff => (
-                    <option key={staff.id} value={staff.id}>
-                      {staff.first_name} {staff.last_name}
-                    </option>
-                  ))}
-                </select>
-                <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
-                  {selectedServiceId 
-                    ? `Choose from our available ${selectedService?.category} specialists`
-                    : 'Please select a service first to see available staff'
-                  }
-                </small>
-              </div>
-
-              {/* Staff Details Display */}
-              {selectedStaff && (
-                <div style={{
-                  backgroundColor: '#f0f8ff',
-                  padding: '16px',
-                  borderRadius: '8px',
-                  marginBottom: '20px',
-                  border: '1px solid #b3d9ff'
-                }}>
-                  <h4 style={{ margin: '0 0 8px 0', color: '#0066cc' }}>
-                    {selectedStaff.first_name} {selectedStaff.last_name}
-                  </h4>
-                  <div style={{ fontSize: '14px', color: '#666' }}>
-                    Professional beauty and wellness specialist
-                  </div>
-                </div>
-              )}
-
-              {/* Date Selection */}
-              <div className="form-group">
-                <label htmlFor="date">Preferred Date *</label>
-                <input
-                  type="date"
-                  id="date"
-                  value={selectedDate}
-                  onChange={(e) => handleDateChange(e.target.value)}
-                  required
-                  min={new Date().toISOString().split('T')[0]} // Prevent past dates
-                  max={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]} // 30 days in future
-                />
-              </div>
-
-              {/* Time Selection */}
-              <div className="form-group">
-                <label htmlFor="time">Preferred Time *</label>
-                <select
-                  id="time"
-                  value={selectedTime}
-                  onChange={(e) => setSelectedTime(e.target.value)}
-                  required
-                  disabled={!selectedDate}
-                >
-                  <option value="">
-                    -- {selectedDate ? 'Select a Time' : 'Select a date first'} --
-                  </option>
-                  {availableTimeSlots.map(time => (
-                    <option key={time} value={time}>
-                      {parseInt(time.split(':')[0]) >= 12 
-                        ? `${time} PM` 
-                        : `${time} AM`
-                      }
-                    </option>
-                  ))}
-                </select>
-                <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
-                  {selectedDate === new Date().toISOString().split('T')[0] 
-                    ? `Today's available time slots (current time: ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')})`
-                    : 'Business hours: 9:00 AM - 6:00 PM'
-                  }
-                </small>
-                {selectedDate && availableTimeSlots.length === 0 && (
-                  <small style={{ color: '#d32f2f', marginTop: '4px', display: 'block' }}>
-                    No available time slots for the selected date. Please choose another date.
-                  </small>
-                )}
-              </div>
-
-              {/* Notes */}
-              <div className="form-group">
-                <label htmlFor="notes">Special Requests or Notes (Optional)</label>
-                <textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={3}
-                  placeholder="Any special requirements, allergies, or preferences..."
-                  style={{ resize: 'vertical' }}
-                ></textarea>
-              </div>
-
-              {/* Feedback Messages */}
-              {error && (
-                <div style={{
-                  backgroundColor: '#fee',
-                  border: '1px solid #f5c6cb',
-                  color: '#721c24',
-                  padding: '12px',
-                  borderRadius: '4px',
-                  marginBottom: '16px'
-                }}>
-                  {error}
-                </div>
-              )}
-              
-              {success && (
-                <div style={{
-                  backgroundColor: '#e8f5e8',
-                  border: '1px solid #c8e6c9',
-                  color: '#2e7d32',
-                  padding: '12px',
-                  borderRadius: '4px',
-                  marginBottom: '16px'
-                }}>
-                  {success}
-                </div>
-              )}
-
-              {/* Submit Button */}
-              <Button
-                type="submit"
-                variant="primary"
-                className="contact-submit-btn"
-                disabled={loading || !selectedServiceId || !selectedStaffId || !selectedDate || !selectedTime}
-                style={{ width: '100%', marginTop: '16px' }}
-              >
-                {loading ? 'Booking Appointment...' : 'Confirm Appointment'}
+          {/* Loading State */}
+          {(servicesLoading || staffLoading) ? (
+            <div className="booking-loading">
+              <div className="loading-spinner"></div>
+              <p>Loading available options...</p>
+            </div>
+          ) : services.length === 0 ? (
+            <div className="no-services-state">
+              <p>No services available at the moment. Please check back later.</p>
+              <Button variant="secondary" onClick={fetchServices} className="retry-button">
+                Retry Loading Services
               </Button>
-
-              {/* Booking Summary */}
-              {selectedService && selectedStaff && selectedDate && selectedTime && (
-                <div style={{
-                  backgroundColor: '#e8f4fd',
-                  padding: '16px',
-                  borderRadius: '8px',
-                  marginTop: '20px',
-                  border: '1px solid #b3d9ff'
-                }}>
-                  <h5 style={{ margin: '0 0 12px 0', color: '#0066cc' }}>
-                    Booking Summary
-                  </h5>
-                  <div style={{ fontSize: '14px', lineHeight: '1.5' }}>
-                    <div><strong>Service:</strong> {selectedService.name}</div>
-                    <div><strong>Staff:</strong> {selectedStaff.first_name} {selectedStaff.last_name}</div>
-                    <div><strong>Date:</strong> {new Date(selectedDate).toLocaleDateString()}</div>
-                    <div><strong>Time:</strong> {selectedTime}</div>
-                    <div><strong>Total:</strong> {formatCurrency(selectedService.price)}</div>
-                  </div>
+            </div>
+          ) : staffMembers.length === 0 ? (
+            <div className="no-staff-state">
+              <p>No staff members available at the moment. Please check back later.</p>
+            </div>
+          ) : (
+            <div className="booking-form-container">
+              <form className="booking-form" onSubmit={handleSubmit}>
+                {/* Service Selection */}
+                <div className="form-group">
+                  <label htmlFor="service">Select Service *</label>
+                  <select
+                    id="service"
+                    value={selectedServiceId}
+                    onChange={(e) => handleServiceChange(e.target.value)}
+                    required
+                    className="form-select"
+                  >
+                    <option value="">-- Choose a Service --</option>
+                    {services.map(service => (
+                      <option key={service.id} value={service.id}>
+                        {service.name} - {formatCurrency(service.price)} ({service.durationMinutes} min)
+                      </option>
+                    ))}
+                  </select>
+                  <small className="form-note">
+                    {services.length} services available
+                    {preselectedService && selectedService && ` • "${preselectedService.name}" is pre-selected`}
+                  </small>
                 </div>
-              )}
-            </form>
-          </div>
-        )}
+
+                {/* Service Details Display */}
+                {selectedService && (
+                  <div className="service-details-card">
+                    <h4 className="service-name">
+                      {selectedService.name}
+                    </h4>
+                    <p className="service-description">
+                      {selectedService.description}
+                    </p>
+                    <div className="service-meta">
+                      <span className="service-price">
+                        Price: {formatCurrency(selectedService.price)}
+                      </span>
+                      <span className="service-duration">
+                        Duration: {selectedService.durationMinutes} minutes
+                      </span>
+                      <span className="service-category">
+                        Category: {selectedService.category}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Staff Selection */}
+                <div className="form-group">
+                  <label htmlFor="staff">Select Preferred Staff *</label>
+                  <select
+                    id="staff"
+                    value={selectedStaffId}
+                    onChange={(e) => setSelectedStaffId(e.target.value)}
+                    required
+                    disabled={!selectedServiceId}
+                    className="form-select"
+                  >
+                    <option value="">
+                      -- {selectedServiceId ? 'Choose a Staff Member' : 'Select a service first'} --
+                    </option>
+                    {specializedStaff.map(staff => (
+                      <option key={staff.id} value={staff.id}>
+                        {staff.first_name} {staff.last_name}
+                      </option>
+                    ))}
+                  </select>
+                  <small className="form-note">
+                    {selectedServiceId 
+                      ? `Choose from our available ${selectedService?.category} specialists`
+                      : 'Please select a service first to see available staff'
+                    }
+                  </small>
+                </div>
+
+                {/* Staff Details Display */}
+                {selectedStaff && (
+                  <div className="staff-details-card">
+                    <h4 className="staff-name">
+                      {selectedStaff.first_name} {selectedStaff.last_name}
+                    </h4>
+                    <div className="staff-role">
+                      Professional beauty and wellness specialist
+                    </div>
+                  </div>
+                )}
+
+                {/* Date Selection */}
+                <div className="form-group">
+                  <label htmlFor="date">Preferred Date *</label>
+                  <input
+                    type="date"
+                    id="date"
+                    value={selectedDate}
+                    onChange={(e) => handleDateChange(e.target.value)}
+                    required
+                    className="form-input"
+                    min={new Date().toISOString().split('T')[0]} // Prevent past dates
+                    max={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]} // 30 days in future
+                  />
+                </div>
+
+                {/* Time Selection */}
+                <div className="form-group">
+                  <label htmlFor="time">Preferred Time *</label>
+                  <select
+                    id="time"
+                    value={selectedTime}
+                    onChange={(e) => setSelectedTime(e.target.value)}
+                    required
+                    disabled={!selectedDate}
+                    className="form-select"
+                  >
+                    <option value="">
+                      -- {selectedDate ? 'Select a Time' : 'Select a date first'} --
+                    </option>
+                    {availableTimeSlots.map(time => (
+                      <option key={time} value={time}>
+                        {parseInt(time.split(':')[0]) >= 12 
+                          ? `${time} PM` 
+                          : `${time} AM`
+                        }
+                      </option>
+                    ))}
+                  </select>
+                  <small className="form-note">
+                    {selectedDate === new Date().toISOString().split('T')[0] 
+                      ? `Today's available time slots (current time: ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')})`
+                      : 'Business hours: 9:00 AM - 6:00 PM'
+                    }
+                  </small>
+                  {selectedDate && availableTimeSlots.length === 0 && (
+                    <small className="form-error-note">
+                      No available time slots for the selected date. Please choose another date.
+                    </small>
+                  )}
+                </div>
+
+                {/* Notes */}
+                <div className="form-group">
+                  <label htmlFor="notes">Special Requests or Notes (Optional)</label>
+                  <textarea
+                    id="notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
+                    placeholder="Any special requirements, allergies, or preferences..."
+                    className="form-textarea"
+                  ></textarea>
+                </div>
+
+                {/* Feedback Messages */}
+                {error && (
+                  <div className="form-error-message">
+                    {error}
+                  </div>
+                )}
+                
+                {success && (
+                  <div className="form-success-message">
+                    {success}
+                  </div>
+                )}
+
+                {/* Submit Button */}
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="booking-submit-button"
+                  disabled={loading || !selectedServiceId || !selectedStaffId || !selectedDate || !selectedTime}
+                >
+                  {loading ? 'Booking Appointment...' : 'Confirm Appointment'}
+                </Button>
+
+                {/* Booking Summary */}
+                {selectedService && selectedStaff && selectedDate && selectedTime && (
+                  <div className="booking-summary-card">
+                    <h5 className="summary-title">
+                      Booking Summary
+                    </h5>
+                    <div className="summary-details">
+                      <div className="summary-item">
+                        <strong>Service:</strong> {selectedService.name}
+                      </div>
+                      <div className="summary-item">
+                        <strong>Staff:</strong> {selectedStaff.first_name} {selectedStaff.last_name}
+                      </div>
+                      <div className="summary-item">
+                        <strong>Date:</strong> {new Date(selectedDate).toLocaleDateString()}
+                      </div>
+                      <div className="summary-item">
+                        <strong>Time:</strong> {selectedTime}
+                      </div>
+                      <div className="summary-item">
+                        <strong>Total:</strong> {formatCurrency(selectedService.price)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </form>
+            </div>
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 };
 

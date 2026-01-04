@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from '@utils/helpers';
 import { useAuth } from '@context/AuthContext';
 import { supabase } from '../../supabaseClient';
 import { SupabaseNotificationService } from '../../services/supabaseNotificationService';
+import "../../assets/styles/staffdashboards.css";
 
 interface BookingWithRelations extends Booking {
   service_name: string;
@@ -34,7 +35,6 @@ const UpdateStatus: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Safe customer details fetch with fallback
   const fetchCustomerDetails = async (customerIds: string[]) => {
     try {
       const { data, error } = await supabase
@@ -83,7 +83,6 @@ const UpdateStatus: React.FC = () => {
     }
   };
 
-  // Fetch staff bookings from Supabase
   const fetchStaffBookings = async () => {
     try {
       setBookingsLoading(true);
@@ -94,7 +93,6 @@ const UpdateStatus: React.FC = () => {
         return;
       }
 
-      // Get bookings for this staff member
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
@@ -107,9 +105,7 @@ const UpdateStatus: React.FC = () => {
         throw error;
       }
 
-      // If we have bookings, fetch related data
       if (data && data.length > 0) {
-        // Fetch service details
         const serviceIds = [...new Set(data.map(booking => booking.service_id))];
         
         const { data: servicesData, error: servicesError } = await supabase
@@ -121,11 +117,9 @@ const UpdateStatus: React.FC = () => {
           console.error('Error fetching services:', servicesError);
         }
 
-        // Fetch customer details
         const customerIds = [...new Set(data.map(booking => booking.customer_id))];
         const customersData = await fetchCustomerDetails(customerIds);
 
-        // Transform data
         const staffBookings: BookingWithRelations[] = data.map(booking => {
           const service = servicesData?.find(s => s.id === booking.service_id);
           const customer = customersData?.find(c => c.id === booking.customer_id);
@@ -187,7 +181,6 @@ const UpdateStatus: React.FC = () => {
     setSuccess(null);
 
     try {
-      // Update booking status in Supabase
       const { error } = await supabase
         .from('bookings')
         .update({ 
@@ -199,7 +192,6 @@ const UpdateStatus: React.FC = () => {
 
       if (error) throw error;
 
-      // ✅ NOTIFICATION TRIGGERS - With error handling
       let notificationSent = false;
       try {
         if (newStatus === 'confirmed') {
@@ -214,7 +206,6 @@ const UpdateStatus: React.FC = () => {
         }
       } catch (notificationError) {
         console.error('Notification failed, but booking was updated:', notificationError);
-        // Continue even if notification fails
       }
 
       const successMessage = notificationSent 
@@ -223,10 +214,8 @@ const UpdateStatus: React.FC = () => {
 
       setSuccess(successMessage);
       
-      // Refresh the bookings list
       await fetchStaffBookings();
       
-      // Close modal after a short delay
       setTimeout(() => {
         closeModal();
       }, 2000);
@@ -238,7 +227,6 @@ const UpdateStatus: React.FC = () => {
     }
   };
 
-  // Format date and time for display
   const formatDateTime = (date: string, time: string) => {
     if (!date) return 'N/A';
     
@@ -255,7 +243,6 @@ const UpdateStatus: React.FC = () => {
     return `${formattedDate} at ${displayHour}:${minutes} ${ampm}`;
   };
 
-  // Get status options based on current status
   const getAvailableStatusOptions = (currentStatus: BookingStatus) => {
     const options: { value: BookingStatus; label: string; description: string }[] = [];
     
@@ -299,8 +286,8 @@ const UpdateStatus: React.FC = () => {
       key: 'customerName',
       render: (item: BookingWithRelations) => (
         <div>
-          <div style={{ fontWeight: '500' }}>{item.customer_name}</div>
-          <div style={{ fontSize: '0.875rem', color: '#666' }}>
+          <div className="customer-name">{item.customer_name}</div>
+          <div className="customer-email">
             ✉️ {item.customer_email}
           </div>
         </div>
@@ -314,24 +301,17 @@ const UpdateStatus: React.FC = () => {
     { 
       header: 'Current Status', 
       key: 'status',
-      render: (item: BookingWithRelations) => (
-        <span style={{ 
-          padding: '4px 8px', 
-          borderRadius: '12px', 
-          fontSize: '12px',
-          fontWeight: 'bold',
-          backgroundColor: 
-            item.status === 'confirmed' ? '#e8f5e8' :
-            item.status === 'completed' ? '#e3f2fd' :
-            item.status === 'cancelled' ? '#ffebee' : '#fff3e0',
-          color: 
-            item.status === 'confirmed' ? '#2e7d32' :
-            item.status === 'completed' ? '#1565c0' :
-            item.status === 'cancelled' ? '#c62828' : '#f57c00'
-        }}>
-          {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-        </span>
-      )
+      render: (item: BookingWithRelations) => {
+        const statusClass = item.status === 'confirmed' ? 'booking-status-badge-confirmed' :
+                           item.status === 'completed' ? 'booking-status-badge-completed' :
+                           item.status === 'cancelled' ? 'booking-status-badge-cancelled' : 'booking-status-badge-pending';
+        
+        return (
+          <span className={`booking-status-badge ${statusClass}`}>
+            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+          </span>
+        );
+      }
     },
     { 
       header: 'Price', 
@@ -345,7 +325,7 @@ const UpdateStatus: React.FC = () => {
         const availableOptions = getAvailableStatusOptions(item.status);
         
         return availableOptions.length > 0 ? (
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <div className="status-actions">
             {availableOptions.map(option => (
               <Button 
                 key={option.value}
@@ -356,17 +336,14 @@ const UpdateStatus: React.FC = () => {
                   setNewStatus(option.value);
                   openModal();
                 }}
-                style={{ 
-                  fontSize: '12px',
-                  ...(option.value === 'cancelled' ? { color: '#d32f2f' } : {})
-                }}
+                className={`status-button ${option.value === 'cancelled' ? 'cancel-action' : 'confirm-action'}`}
               >
                 {option.label}
               </Button>
             ))}
           </div>
         ) : (
-          <span style={{ color: '#666', fontStyle: 'italic', fontSize: '12px' }}>
+          <span className="no-actions-label">
             No actions available
           </span>
         );
@@ -374,7 +351,6 @@ const UpdateStatus: React.FC = () => {
     },
   ];
 
-  // Filter bookings to show only active ones
   const activeBookings = bookings.filter(booking => 
     booking.status === 'pending' || booking.status === 'confirmed'
   );
@@ -382,182 +358,123 @@ const UpdateStatus: React.FC = () => {
   const allBookings = bookings;
 
   return (
-    <>
-      <DashboardHeader title="Manage Appointments" />
-      <div className="page-container">
-        <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
-          Confirm, complete, or cancel customer appointments assigned to you.
-        </p>
-
-        {/* Error/Success Messages */}
-        {error && (
-          <div style={{
-            backgroundColor: '#fee',
-            border: '1px solid #f5c6cb',
-            color: '#721c24',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '16px',
-            textAlign: 'center'
-          }}>
-            {error}
-          </div>
-        )}
-        
-        {success && (
-          <div style={{
-            backgroundColor: '#e8f5e8',
-            border: '1px solid #c8e6c9',
-            color: '#2e7d32',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '16px',
-            textAlign: 'center'
-          }}>
-            {success}
-          </div>
-        )}
-
-        {/* Quick Stats */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
-          gap: 'var(--spacing-md)',
-          marginBottom: 'var(--spacing-xl)'
-        }}>
-          <div style={{
-            padding: 'var(--spacing-md)',
-            backgroundColor: '#fff3e0',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #ffb74d'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#f57c00' }}>
-              {bookings.filter(b => b.status === 'pending').length}
-            </h3>
-            <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>Pending</p>
-          </div>
-          <div style={{
-            padding: 'var(--spacing-md)',
-            backgroundColor: '#e8f5e8',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #81c784'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#2e7d32' }}>
-              {bookings.filter(b => b.status === 'confirmed').length}
-            </h3>
-            <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>Confirmed</p>
-          </div>
-          <div style={{
-            padding: 'var(--spacing-md)',
-            backgroundColor: '#e3f2fd',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #64b5f6'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#1565c0' }}>
-              {bookings.filter(b => b.status === 'completed').length}
-            </h3>
-            <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>Completed</p>
-          </div>
-          <div style={{
-            padding: 'var(--spacing-md)',
-            backgroundColor: '#f5f5f5',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #e0e0e0'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#333' }}>
-              {bookings.length}
-            </h3>
-            <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>Total</p>
-          </div>
-        </div>
-
-        {/* Active Appointments Section */}
-        <section style={{ marginBottom: 'var(--spacing-xl)' }}>
-          <h3 style={{ 
-            marginBottom: 'var(--spacing-md)', 
-            fontSize: '1.5rem', 
-            fontFamily: 'var(--font-family-serif)',
-            color: 'var(--text-primary)'
-          }}>
-            Active Appointments ({activeBookings.length})
-          </h3>
+    <div className="dashboard-layout-container">
+      <div className="dashboard-main-content">
+        <div className="dashboard-content-wrapper">
+          <DashboardHeader title="Manage Appointments" />
           
-          {bookingsLoading ? (
-            <div style={{ textAlign: 'center', padding: '40px' }}>
-              <p>Loading your appointments...</p>
-            </div>
-          ) : activeBookings.length > 0 ? (
-            <Table data={activeBookings} columns={columns} />
-          ) : (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '40px',
-              backgroundColor: '#f9f9f9',
-              borderRadius: 'var(--border-radius)',
-              border: '1px solid #e0e0e0'
-            }}>
-              <p style={{ color: '#666', marginBottom: 'var(--spacing-md)' }}>
-                No active appointments requiring action.
-              </p>
-              <p style={{ color: '#999', fontSize: '0.875rem' }}>
-                When customers book appointments with you, they will appear here for you to confirm or manage.
-              </p>
+          <div className="booking-header">
+            <h1 className="page-title">Manage Appointments</h1>
+            <p className="page-subtitle">
+              Confirm, complete, or cancel customer appointments assigned to you.
+            </p>
+          </div>
+
+          {error && (
+            <div className="dashboard-error">
+              {error}
             </div>
           )}
-        </section>
+          
+          {success && (
+            <div className="dashboard-success">
+              {success}
+            </div>
+          )}
 
-        {/* All Appointments Section */}
-        {allBookings.length > 0 && (
-          <section>
-            <details style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius)' }}>
-              <summary style={{ 
-                padding: 'var(--spacing-md) var(--spacing-lg)',
-                cursor: 'pointer',
-                fontSize: '1.5rem',
-                fontFamily: 'var(--font-family-serif)',
-                color: 'var(--text-primary)',
-                listStyle: 'none',
-                backgroundColor: 'var(--gray-50)'
-              }}>
-                All Appointments ({allBookings.length})
-                <span style={{ float: 'right', fontSize: '1rem' }}>▼</span>
-              </summary>
-              <div style={{ padding: 'var(--spacing-md) 0' }}>
-                <Table data={allBookings} columns={columns} />
+          <div className="stats-grid">
+            <div className="stat-card pending-card">
+              <p className="stat-number">{bookings.filter(b => b.status === 'pending').length}</p>
+              <p className="stat-label">Pending</p>
+            </div>
+            <div className="stat-card confirmed-card">
+              <p className="stat-number">{bookings.filter(b => b.status === 'confirmed').length}</p>
+              <p className="stat-label">Confirmed</p>
+            </div>
+            <div className="stat-card completed-card">
+              <p className="stat-number">{bookings.filter(b => b.status === 'completed').length}</p>
+              <p className="stat-label">Completed</p>
+            </div>
+            <div className="stat-card total-card">
+              <p className="stat-number">{bookings.length}</p>
+              <p className="stat-label">Total</p>
+            </div>
+          </div>
+
+          <div className="upcoming-bookings-section">
+            <div className="section-header">
+              <h2 className="section-title">
+                Active Appointments ({activeBookings.length})
+              </h2>
+              <div className="section-actions">
+                <Button 
+                  variant="secondary" 
+                  size="small"
+                  onClick={fetchStaffBookings}
+                  className="refresh-button"
+                >
+                  Refresh
+                </Button>
               </div>
-            </details>
-          </section>
-        )}
+            </div>
+
+            {bookingsLoading ? (
+              <div className="dashboard-loading">
+                <p>Loading your appointments...</p>
+              </div>
+            ) : activeBookings.length > 0 ? (
+              <Table data={activeBookings} columns={columns} />
+            ) : (
+              <div className="empty-booking-state">
+                <p className="empty-message">No active appointments requiring action.</p>
+                <p className="empty-subtext">
+                  When customers book appointments with you, they will appear here for you to confirm or manage.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {allBookings.length > 0 && (
+            <div className="recent-bookings-section">
+              <details className="recent-bookings-details">
+                <summary className="recent-bookings-summary">
+                  All Appointments ({allBookings.length})
+                  <span className="dropdown-icon">▼</span>
+                </summary>
+                <div className="recent-bookings-content">
+                  <Table data={allBookings} columns={columns} />
+                </div>
+              </details>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Update Status Modal */}
       <Modal isOpen={isOpen} onClose={closeModal} title="Update Appointment Status">
         {selectedBooking && (
           <>
-            <div style={{ marginBottom: 'var(--spacing-md)' }}>
-              <p style={{ marginBottom: '8px' }}>
+            <div className="modal-booking-info">
+              <p className="booking-service">
                 Updating status for <strong>{selectedBooking.service_name}</strong>
               </p>
-              <p style={{ margin: '4px 0', color: '#666', fontSize: '14px' }}>
+              <p className="booking-detail">
                 Customer: <strong>{selectedBooking.customer_name}</strong>
               </p>
-              <p style={{ margin: '4px 0', color: '#666', fontSize: '14px' }}>
+              <p className="booking-detail">
                 Date: <strong>{formatDateTime(selectedBooking.booking_date, selectedBooking.booking_time)}</strong>
               </p>
-              <p style={{ margin: '4px 0', color: '#666', fontSize: '14px' }}>
+              <p className="booking-detail">
                 Current Status: <strong>{selectedBooking.status}</strong>
               </p>
             </div>
 
-            <form onSubmit={handleConfirmUpdate} className="contact-form">
+            <form onSubmit={handleConfirmUpdate} className="update-status-form">
               <div className="form-group">
                 <label htmlFor="new-status">Update Status To</label>
                 <select
                   id="new-status"
+                  className="form-select"
                   value={newStatus}
                   onChange={(e) => setNewStatus(e.target.value as BookingStatus)}
                   required
@@ -570,39 +487,25 @@ const UpdateStatus: React.FC = () => {
                   ))}
                 </select>
                 {newStatus && (
-                  <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+                  <small className="status-description">
                     {getAvailableStatusOptions(selectedBooking.status).find(opt => opt.value === newStatus)?.description}
                   </small>
                 )}
               </div>
 
               {error && (
-                <div style={{
-                  backgroundColor: '#fee',
-                  border: '1px solid #f5c6cb',
-                  color: '#721c24',
-                  padding: '12px',
-                  borderRadius: '4px',
-                  marginBottom: '16px'
-                }}>
+                <div className="form-error">
                   {error}
                 </div>
               )}
 
               {success && (
-                <div style={{
-                  backgroundColor: '#e8f5e8',
-                  border: '1px solid #c8e6c9',
-                  color: '#2e7d32',
-                  padding: '12px',
-                  borderRadius: '4px',
-                  marginBottom: '16px'
-                }}>
+                <div className="form-success">
                   {success}
                 </div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
+              <div className="modal-actions">
                 <Button variant="secondary" onClick={closeModal} disabled={loading}>
                   Cancel
                 </Button>
@@ -614,7 +517,7 @@ const UpdateStatus: React.FC = () => {
           </>
         )}
       </Modal>
-    </>
+    </div>
   );
 };
 

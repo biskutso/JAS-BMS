@@ -8,6 +8,7 @@ import { useModal } from '@hooks/useModal';
 import { Service } from '@models/service';
 import { formatCurrency } from '@utils/helpers';
 import { supabase } from '../../supabaseClient';
+import "../../assets/styles/dashboards.css";
 
 interface ServiceFormData {
   service_name: string;
@@ -33,11 +34,13 @@ const ManageServices: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Fetch services from Supabase
   const fetchServices = async () => {
     try {
       setLoading(true);
+      setError(null);
       const { data, error } = await supabase
         .from('services')
         .select('*')
@@ -158,6 +161,7 @@ const ManageServices: React.FC = () => {
     try {
       const imageUrl = await uploadImage(file);
       setFormData(prev => ({ ...prev, service_img: imageUrl }));
+      setError(null);
     } catch (err: any) {
       setError(err.message);
     }
@@ -178,6 +182,7 @@ const ManageServices: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccessMessage(null);
 
     // Validate form
     const validationError = validateForm();
@@ -209,31 +214,30 @@ const ManageServices: React.FC = () => {
         duration: formData.duration,
         category: formData.category,
         service_img: formData.service_img || null, // Use null instead of empty string
-        created_at: editingService ? undefined : new Date().toISOString() // Add timestamp for new services
+        updated_at: new Date().toISOString(),
+        ...(!editingService && { created_at: new Date().toISOString() })
       };
 
       console.log('Submitting service data:', serviceData);
 
       if (editingService) {
         // Update existing service
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('services')
           .update(serviceData)
-          .eq('id', editingService.id)
-          .select();
+          .eq('id', editingService.id);
 
         if (error) {
           console.error('Update error:', error);
           throw error;
         }
         
-        console.log('Updated Service:', data?.[0]);
+        setSuccessMessage('Service updated successfully');
       } else {
         // Create new service
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('services')
-          .insert([serviceData])
-          .select();
+          .insert([serviceData]);
 
         if (error) {
           console.error('Insert error:', error);
@@ -248,9 +252,10 @@ const ManageServices: React.FC = () => {
           }
         }
         
-        console.log('Added Service:', data?.[0]);
+        setSuccessMessage('Service added successfully');
       }
 
+      setTimeout(() => setSuccessMessage(null), 3000);
       await fetchServices(); // Refresh the list
       closeModal();
     } catch (err: any) {
@@ -266,6 +271,7 @@ const ManageServices: React.FC = () => {
 
     setLoading(true);
     setError(null);
+    setSuccessMessage(null);
     try {
       const { error } = await supabase
         .from('services')
@@ -275,7 +281,8 @@ const ManageServices: React.FC = () => {
       if (error) throw error;
 
       await fetchServices(); // Refresh the list
-      console.log('Deleted Service:', serviceId);
+      setSuccessMessage('Service deleted successfully');
+      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       setError(err.message || 'Failed to delete service.');
     } finally {
@@ -284,10 +291,34 @@ const ManageServices: React.FC = () => {
   };
 
   const columns = [
-    { header: 'Service Name', key: 'name' },
-    { header: 'Category', key: 'category' },
-    { header: 'Price', key: 'price', render: (item: Service) => formatCurrency(item.price) },
-    { header: 'Duration', key: 'durationMinutes', render: (item: Service) => `${item.durationMinutes} min` },
+    { 
+      header: 'Service Name', 
+      key: 'name',
+      render: (item: Service) => (
+        <div className="customer-info-container">
+          <div className="service-name">{item.name}</div>
+          <div className="customer-email">{item.category}</div>
+        </div>
+      )
+    },
+    { 
+      header: 'Price', 
+      key: 'price', 
+      render: (item: Service) => (
+        <span className="service-price">
+          {formatCurrency(item.price)}
+        </span>
+      ) 
+    },
+    { 
+      header: 'Duration', 
+      key: 'durationMinutes', 
+      render: (item: Service) => (
+        <span className="service-duration">
+          {item.durationMinutes} min
+        </span>
+      ) 
+    },
     {
       header: 'Image',
       key: 'imageUrl',
@@ -315,25 +346,86 @@ const ManageServices: React.FC = () => {
   ];
 
   return (
-    <>
-      <DashboardHeader
-        title="Manage Services"
-        actions={<Button variant="primary" onClick={handleAddClick}>Add New Service</Button>}
-      />
-      <div className="page-container">
-        <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
-          Create, update, and remove services offered by the salon and spa.
-        </p>
+    <div className="dashboard-layout-container">
+      <div className="dashboard-main-content">
+        <DashboardHeader title="Manage Services" />
         
-        {loading && !isOpen && <p style={{textAlign: 'center'}}>Loading services...</p>}
-        {error && <p className="auth-error-message" style={{textAlign: 'center'}}>{error}</p>}
-        
-        <Table 
-          data={services} 
-          columns={columns} 
-          caption="Salon & Spa Services"
-          emptyMessage="No services found. Add your first service to get started."
-        />
+        <div className="dashboard-content-wrapper">
+          <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
+            Create, update, and remove services offered by the salon and spa.
+          </p>
+
+          {successMessage && (
+            <div className="inventory-success-message">
+              {successMessage}
+            </div>
+          )}
+          
+          {loading && !isOpen && (
+            <div className="dashboard-loading">
+              <p>Loading services...</p>
+            </div>
+          )}
+          
+          {error && (
+            <div className="dashboard-error">
+              {error}
+              <div className="dashboard-error-actions">
+                <Button 
+                  variant="text" 
+                  size="small" 
+                  onClick={fetchServices}
+                  style={{ fontSize: '14px' }}
+                >
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          <div className="recent-bookings-section">
+            <div className="recent-bookings-header">
+              <h3 className="recent-bookings-title">
+                Salon & Spa Services
+              </h3>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <Button 
+                  variant="secondary" 
+                  onClick={fetchServices} 
+                  disabled={loading}
+                  size="small"
+                >
+                  Refresh
+                </Button>
+                <Button 
+                  variant="primary" 
+                  onClick={handleAddClick} 
+                  disabled={loading}
+                  size="small"
+                >
+                  Add New Service
+                </Button>
+              </div>
+            </div>
+
+            {services.length > 0 ? (
+              <Table 
+                data={services} 
+                columns={columns} 
+                emptyMessage="No services found. Add your first service to get started."
+              />
+            ) : (
+              <div className="dashboard-empty-state">
+                <p className="empty-state-message">
+                  No services found.
+                </p>
+                <p className="empty-state-subtext">
+                  Add your first service to get started.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <Modal isOpen={isOpen} onClose={closeModal} title={editingService ? "Edit Service" : "Add New Service"}>
@@ -514,7 +606,7 @@ const ManageServices: React.FC = () => {
           </div>
         </form>
       </Modal>
-    </>
+    </div>
   );
 };
 

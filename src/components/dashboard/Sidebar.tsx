@@ -1,11 +1,12 @@
 // src/components/dashboard/Sidebar.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@context/AuthContext';
 import { IconType } from 'react-icons';
 import {
   MdDashboard, MdPerson, MdCalendarToday, MdListAlt, MdStore,
-  MdPeople, MdSettings, MdHistory, MdNotifications, MdReport, MdEventAvailable
+  MdPeople, MdSettings, MdHistory, MdNotifications, MdReport, 
+  MdEventAvailable, MdMenu, MdClose
 } from 'react-icons/md';
 import { supabase } from '../../supabaseClient';
 
@@ -49,15 +50,29 @@ const Sidebar: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  const location = useLocation();
   
   const designMode = true;
   const userRole = user?.role || 'customer';
 
-  // Optimized fetch with caching and instant updates
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMobileMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleEscapeKey);
+    return () => window.removeEventListener('keydown', handleEscapeKey);
+  }, []);
+
   const fetchUnreadNotifications = useCallback(async (forceRefresh = false) => {
     if (!user) return;
-
-    // Prevent multiple simultaneous requests
     if (isLoading && !forceRefresh) return;
 
     try {
@@ -69,51 +84,36 @@ const Sidebar: React.FC = () => {
         .eq('user_id', user.id)
         .eq('read', false);
 
-      if (error) {
-        // console.error('❌ Sidebar: Error fetching unread notifications:', error);
-        return;
-      }
+      if (error) return;
 
       setUnreadCount(count || 0);
     } catch (error) {
-      // console.error('❌ Sidebar: Error in fetchUnreadNotifications:', error);
+      console.error('Error in fetchUnreadNotifications:', error);
     } finally {
       setIsLoading(false);
     }
   }, [user, isLoading]);
 
-  // INSTANT UPDATE: Local state management for immediate feedback
   const handleNotificationUpdate = useCallback((payload: any) => {
-    // console.log('📢 Sidebar: Processing real-time update', payload);
-    
-    // INSTANT UPDATE: Update count immediately based on the event
     if (payload.eventType === 'INSERT' && payload.new?.read === false) {
-      // New unread notification added
       setUnreadCount(prev => prev + 1);
     } else if (payload.eventType === 'UPDATE' && payload.new?.read === true && payload.old?.read === false) {
-      // Notification marked as read
       setUnreadCount(prev => Math.max(0, prev - 1));
     } else if (payload.eventType === 'DELETE' && payload.old?.read === false) {
-      // Unread notification deleted
       setUnreadCount(prev => Math.max(0, prev - 1));
     }
     
-    // Still refresh from server to ensure accuracy, but with delay
     setTimeout(() => fetchUnreadNotifications(true), 1000);
   }, [fetchUnreadNotifications]);
 
-  // Custom event listener for instant updates from Notifications page
   useEffect(() => {
     const handleCustomNotificationEvent = (event: CustomEvent) => {
-      // console.log('📢 Sidebar: Custom event received', event.detail);
       const { action, countChange } = event.detail;
       
-      // INSTANT UPDATE: Adjust count immediately
       if (countChange) {
         setUnreadCount(prev => Math.max(0, prev + countChange));
       }
       
-      // Refresh from server after a short delay
       setTimeout(() => fetchUnreadNotifications(true), 500);
     };
 
@@ -124,16 +124,11 @@ const Sidebar: React.FC = () => {
     };
   }, [fetchUnreadNotifications]);
 
-  // Real-time subscription with instant updates
   useEffect(() => {
     if (!user) return;
 
-    // Fetch initial count
     fetchUnreadNotifications();
 
-    // console.log('🔄 Sidebar: Setting up optimized real-time subscription...');
-
-    // Subscribe to notification changes
     const subscription = supabase
       .channel('sidebar-notifications-instant')
       .on(
@@ -145,7 +140,6 @@ const Sidebar: React.FC = () => {
           filter: `user_id=eq.${user.id}`
         },
         (payload) => {
-          // console.log('📢 Sidebar: INSERT event', payload);
           handleNotificationUpdate({ ...payload, eventType: 'INSERT' });
         }
       )
@@ -158,7 +152,6 @@ const Sidebar: React.FC = () => {
           filter: `user_id=eq.${user.id}`
         },
         (payload) => {
-          // console.log('📢 Sidebar: UPDATE event', payload);
           handleNotificationUpdate({ ...payload, eventType: 'UPDATE' });
         }
       )
@@ -171,30 +164,22 @@ const Sidebar: React.FC = () => {
           filter: `user_id=eq.${user.id}`
         },
         (payload) => {
-          // console.log('📢 Sidebar: DELETE event', payload);
           handleNotificationUpdate({ ...payload, eventType: 'DELETE' });
         }
       )
-      .subscribe((status) => {
-        // console.log('📢 Sidebar: Subscription status:', status);
-        if (status === 'SUBSCRIBED') {
-          // console.log('✅ Sidebar: Real-time subscription active');
-        }
-      });
+      .subscribe();
 
     return () => {
-      // console.log('🔄 Sidebar: Cleaning up subscription');
       subscription.unsubscribe();
     };
   }, [user, handleNotificationUpdate, fetchUnreadNotifications]);
 
-  // Polling as fallback (less frequent since we have instant updates)
   useEffect(() => {
     if (!user) return;
 
     const interval = setInterval(() => {
       fetchUnreadNotifications(true);
-    }, 60000); // Refresh every 60 seconds as backup
+    }, 60000);
 
     return () => clearInterval(interval);
   }, [user, fetchUnreadNotifications]);
@@ -202,40 +187,76 @@ const Sidebar: React.FC = () => {
   if (!isAuthenticated && !designMode) {
     return null;
   }
-
+  
   const filteredNavItems = sidebarNavItems.filter(item => item.roles.includes(userRole));
 
   return (
-    <aside className="sidebar">
-      <h3>{userRole.charAt(0).toUpperCase() + userRole.slice(1)} Dashboard</h3>
-      <nav className="sidebar-nav">
-        <ul>
-          {filteredNavItems.map((item) => (
-            <li key={item.path}>
-              <NavLink
-                to={item.path}
-                className={({ isActive }) => (isActive ? 'active' : '')}
-                end
-              >
-                <div className="nav-item-content">
-                  <item.icon className="nav-icon" />
-                  <span className="nav-text">{item.name}</span>
-                  
-                  {item.showNotification && unreadCount > 0 && (
-                    <span 
-                      className={`notification-badge ${isLoading ? 'pulsing' : ''}`}
-                      title={`${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}`}
-                    >
-                      {unreadCount > 99 ? '99+' : unreadCount}
-                    </span>
-                  )}
-                </div>
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      </nav>
-    </aside>
+    <>
+      <button 
+        id="dashboard-menu-toggle"
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+        aria-expanded={isMobileMenuOpen}
+      >
+        {isMobileMenuOpen ? <MdClose /> : <MdMenu />}
+      </button>
+
+      <div 
+        id="dashboard-mobile-overlay"
+        className={isMobileMenuOpen ? 'active' : ''}
+        onClick={() => setIsMobileMenuOpen(false)}
+      />
+
+      <div id="dashboard-mobile-header">
+        <h1 id="dashboard-mobile-header-title">{userRole.charAt(0).toUpperCase() + userRole.slice(1)} Dashboard</h1>
+        <div id="dashboard-mobile-header-actions">
+          {unreadCount > 0 && (
+            <span id="dashboard-notification-badge">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+          <button 
+            id="dashboard-mobile-menu-toggle"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+          >
+            {isMobileMenuOpen ? <MdClose /> : <MdMenu />}
+          </button>
+        </div>
+      </div>
+
+      <aside id="dashboard-sidebar" className={isMobileMenuOpen ? 'open' : ''}>
+        <h3 id="dashboard-sidebar-title">{userRole.charAt(0).toUpperCase() + userRole.slice(1)} Dashboard</h3>
+        <nav id="dashboard-sidebar-nav">
+          <ul id="dashboard-sidebar-nav-list">
+            {filteredNavItems.map((item) => (
+              <li key={item.path} className="dashboard-sidebar-nav-item">
+                <NavLink
+                  to={item.path}
+                  className={({ isActive }) => (isActive ? 'active' : '')}
+                  end
+                >
+                  <div id={`dashboard-nav-item-${item.name.toLowerCase().replace(/\s+/g, '-')}`}>
+                    <item.icon className="dashboard-nav-icon" />
+                    <span className="dashboard-nav-text">{item.name}</span>
+                    
+                    {item.showNotification && unreadCount > 0 && (
+                      <span 
+                        id="dashboard-sidebar-notification-badge"
+                        className={isLoading ? 'pulsing' : ''}
+                        title={`${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}`}
+                      >
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                  </div>
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </aside>
+    </>
   );
 };
 

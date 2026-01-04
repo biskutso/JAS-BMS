@@ -6,8 +6,9 @@ import { Link } from 'react-router-dom';
 import Table from '@components/dashboard/Table';
 import Button from '@components/common/Button';
 import { Booking, BookingStatus } from '@models/booking';
-import { formatCurrency, formatDate } from '@utils/helpers';
+import { formatCurrency } from '@utils/helpers';
 import { supabase } from '../../supabaseClient';
+import "../../assets/styles/dashboards.css";
 
 interface BookingWithRelations extends Booking {
   service_name: string;
@@ -282,16 +283,20 @@ const AdminDashboard: React.FC = () => {
     { 
       header: 'Service', 
       key: 'serviceName',
-      render: (item: BookingWithRelations) => item.service_name
+      render: (item: BookingWithRelations) => (
+        <span className="service-name">
+          {item.service_name}
+        </span>
+      )
     },
     { 
       header: 'Customer', 
       key: 'customerName',
       render: (item: BookingWithRelations) => (
-        <div>
-          <div style={{ fontWeight: '500' }}>{item.customer_name}</div>
+        <div className="customer-info-container">
+          <div className="customer-name">{item.customer_name}</div>
           {item.customer_email && (
-            <div style={{ fontSize: '0.875rem', color: '#666' }}>
+            <div className="customer-email">
               ✉️ {item.customer_email}
             </div>
           )}
@@ -301,12 +306,20 @@ const AdminDashboard: React.FC = () => {
     { 
       header: 'Staff', 
       key: 'staffName',
-      render: (item: BookingWithRelations) => item.staff_name || 'Unassigned'
+      render: (item: BookingWithRelations) => (
+        <span className="staff-name">
+          {item.staff_name || 'Unassigned'}
+        </span>
+      )
     },
     { 
       header: 'Date & Time', 
       key: 'datetime',
-      render: (item: BookingWithRelations) => formatDateTime(item.booking_date, item.booking_time)
+      render: (item: BookingWithRelations) => (
+        <span className="datetime-text">
+          {formatDateTime(item.booking_date, item.booking_time)}
+        </span>
+      )
     },
     { 
       header: 'Price', 
@@ -316,304 +329,178 @@ const AdminDashboard: React.FC = () => {
     { 
       header: 'Status', 
       key: 'status',
-      render: (item: BookingWithRelations) => (
-        <span style={{ 
-          padding: '4px 8px', 
-          borderRadius: '12px', 
-          fontSize: '12px',
-          fontWeight: 'bold',
-          backgroundColor: 
-            item.status === 'confirmed' ? '#e8f5e8' :
-            item.status === 'completed' ? '#e3f2fd' :
-            item.status === 'cancelled' ? '#ffebee' : '#fff3e0',
-          color: 
-            item.status === 'confirmed' ? '#2e7d32' :
-            item.status === 'completed' ? '#1565c0' :
-            item.status === 'cancelled' ? '#c62828' : '#f57c00'
-        }}>
-          {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-        </span>
-      )
+      render: (item: BookingWithRelations) => {
+        const statusClass = `booking-status-badge booking-status-badge-${item.status}`;
+        return (
+          <span className={statusClass}>
+            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+          </span>
+        );
+      }
     },
   ];
 
   return (
-    <>
-      <DashboardHeader title={`Hello Admin, ${user?.first_name}!`} />
-      <div className="page-container">
-        {/* Error Message */}
-        {error && (
-          <div style={{
-            backgroundColor: '#fee',
-            border: '1px solid #f5c6cb',
-            color: '#721c24',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '16px',
-            textAlign: 'center'
-          }}>
-            <strong>Error:</strong> {error}
-            <div style={{ marginTop: '8px' }}>
-              <Button 
-                variant="text" 
-                size="small" 
-                onClick={fetchDashboardData}
-                style={{ fontSize: '12px', marginRight: '8px' }}
-              >
-                Try Again
-              </Button>
-              <Button 
-                variant="text" 
-                size="small" 
-                onClick={() => console.log('Debug info:', { recentBookings, stats, user })}
-                style={{ fontSize: '12px' }}
-              >
-                Debug Info
-              </Button>
+    <div className="dashboard-layout-container">
+      <div className="dashboard-main-content">
+        <DashboardHeader title={`Hello Admin, ${user?.first_name}!`} />
+        <div className="dashboard-content-wrapper">
+          {/* Error Message */}
+          {error && (
+            <div className="dashboard-error">
+              <strong>Error:</strong> {error}
+              <div className="dashboard-error-actions">
+                <Button 
+                  variant="text" 
+                  size="small" 
+                  onClick={fetchDashboardData}
+                  style={{ fontSize: '14px', marginRight: '8px' }}
+                >
+                  Try Again
+                </Button>
+                <Button 
+                  variant="text" 
+                  size="small" 
+                  onClick={() => console.log('Debug info:', { recentBookings, stats, user })}
+                  style={{ fontSize: '14px' }}
+                >
+                  Debug Info
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <h2 className="dashboard-page-title">
+            Dashboard Overview
+          </h2>
+
+          {/* Quick Stats */}
+          <div className="quick-stats-grid">
+            <div className="stat-card stat-card-revenue">
+              <h4 className="stat-title stat-title-revenue">Total Revenue</h4>
+              <p className="stat-value stat-value-revenue">
+                {formatCurrency(stats.totalRevenue)}
+              </p>
+              <p className="stat-description">
+                All Completed Bookings
+              </p>
+            </div>
+            
+            <div className="stat-card stat-card-today">
+              <h4 className="stat-title stat-title-today">Today's Bookings</h4>
+              <p className="stat-value stat-value-today">
+                {stats.todayBookings}
+              </p>
+              <p className="stat-description">
+                Appointments Today
+              </p>
+            </div>
+            
+            <div className="stat-card stat-card-staff">
+              <h4 className="stat-title stat-title-staff">Active Staff</h4>
+              <p className="stat-value stat-value-staff">
+                {stats.activeStaff}
+              </p>
+              <p className="stat-description">
+                Staff Members
+              </p>
             </div>
           </div>
-        )}
 
-        <h2 style={{ 
-          marginBottom: 'var(--spacing-lg)', 
-          fontSize: '2rem', 
-          fontFamily: 'var(--font-family-serif)',
-          color: 'var(--text-primary)'
-        }}>
-          Dashboard Overview
-        </h2>
+          {/* Booking Status Overview */}
+          <div className="booking-status-grid">
+            <div className="status-card status-card-pending">
+              <h4 className="status-title status-title-pending">Pending</h4>
+              <p className="status-value status-value-pending">
+                {stats.pendingBookings}
+              </p>
+            </div>
+            
+            <div className="status-card status-card-confirmed">
+              <h4 className="status-title status-title-confirmed">Confirmed</h4>
+              <p className="status-value status-value-confirmed">
+                {stats.confirmedBookings}
+              </p>
+            </div>
+            
+            <div className="status-card status-card-completed">
+              <h4 className="status-title status-title-completed">Completed</h4>
+              <p className="status-value status-value-completed">
+                {stats.completedBookings}
+              </p>
+            </div>
+            
+            <div className="status-card status-card-total">
+              <h4 className="status-title status-title-total">Total</h4>
+              <p className="status-value status-value-total">
+                {stats.pendingBookings + stats.confirmedBookings + stats.completedBookings}
+              </p>
+            </div>
+          </div>
 
-        {/* Quick Stats */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
-          gap: 'var(--spacing-lg)', 
-          marginBottom: 'var(--spacing-xl)' 
-        }}>
-          <div style={{ 
-            padding: 'var(--spacing-lg)', 
-            border: '1px solid #e0e0e0', 
-            borderRadius: 'var(--border-radius)', 
-            backgroundColor: 'white', 
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <h4 style={{ margin: '0 0 12px 0', color: '#2c5530', fontSize: '1rem' }}>Total Revenue</h4>
-            <p style={{ fontSize: '2rem', fontFamily: 'var(--font-family-serif)', color: '#2c5530', margin: 0, fontWeight: 'bold' }}>
-              {formatCurrency(stats.totalRevenue)}
-            </p>
-            <p style={{ fontSize: '0.875rem', color: '#666', margin: '8px 0 0 0' }}>
-              All Completed Bookings
-            </p>
-          </div>
-          
-          <div style={{ 
-            padding: 'var(--spacing-lg)', 
-            border: '1px solid #e0e0e0', 
-            borderRadius: 'var(--border-radius)', 
-            backgroundColor: 'white', 
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <h4 style={{ margin: '0 0 12px 0', color: '#1976d2', fontSize: '1rem' }}>Today's Bookings</h4>
-            <p style={{ fontSize: '2rem', fontFamily: 'var(--font-family-serif)', color: '#1976d2', margin: 0, fontWeight: 'bold' }}>
-              {stats.todayBookings}
-            </p>
-            <p style={{ fontSize: '0.875rem', color: '#666', margin: '8px 0 0 0' }}>
-              Appointments Today
-            </p>
-          </div>
-          
-          <div style={{ 
-            padding: 'var(--spacing-lg)', 
-            border: '1px solid #e0e0e0', 
-            borderRadius: 'var(--border-radius)', 
-            backgroundColor: 'white', 
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <h4 style={{ margin: '0 0 12px 0', color: '#ed6c02', fontSize: '1rem' }}>Active Staff</h4>
-            <p style={{ fontSize: '2rem', fontFamily: 'var(--font-family-serif)', color: '#ed6c02', margin: 0, fontWeight: 'bold' }}>
-              {stats.activeStaff}
-            </p>
-            <p style={{ fontSize: '0.875rem', color: '#666', margin: '8px 0 0 0' }}>
-              Staff Members
-            </p>
-          </div>
-        </div>
-
-        {/* Booking Status Overview */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-          gap: 'var(--spacing-md)', 
-          marginBottom: 'var(--spacing-xl)' 
-        }}>
-          <div style={{ 
-            padding: 'var(--spacing-md)', 
-            backgroundColor: '#fff3e0', 
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #ffb74d'
-          }}>
-            <h4 style={{ margin: '0 0 8px 0', color: '#f57c00', fontSize: '0.875rem' }}>Pending</h4>
-            <p style={{ fontSize: '1.5rem', color: '#f57c00', margin: 0, fontWeight: 'bold' }}>
-              {stats.pendingBookings}
-            </p>
-          </div>
-          
-          <div style={{ 
-            padding: 'var(--spacing-md)', 
-            backgroundColor: '#e8f5e8', 
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #81c784'
-          }}>
-            <h4 style={{ margin: '0 0 8px 0', color: '#2e7d32', fontSize: '0.875rem' }}>Confirmed</h4>
-            <p style={{ fontSize: '1.5rem', color: '#2e7d32', margin: 0, fontWeight: 'bold' }}>
-              {stats.confirmedBookings}
-            </p>
-          </div>
-          
-          <div style={{ 
-            padding: 'var(--spacing-md)', 
-            backgroundColor: '#e3f2fd', 
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #64b5f6'
-          }}>
-            <h4 style={{ margin: '0 0 8px 0', color: '#1565c0', fontSize: '0.875rem' }}>Completed</h4>
-            <p style={{ fontSize: '1.5rem', color: '#1565c0', margin: 0, fontWeight: 'bold' }}>
-              {stats.completedBookings}
-            </p>
-          </div>
-          
-          <div style={{ 
-            padding: 'var(--spacing-md)', 
-            backgroundColor: '#f5f5f5', 
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #e0e0e0'
-          }}>
-            <h4 style={{ margin: '0 0 8px 0', color: '#666', fontSize: '0.875rem' }}>Total</h4>
-            <p style={{ fontSize: '1.5rem', color: '#333', margin: 0, fontWeight: 'bold' }}>
-              {stats.pendingBookings + stats.confirmedBookings + stats.completedBookings}
-            </p>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
-          gap: 'var(--spacing-md)',
-          marginBottom: 'var(--spacing-xl)'
-        }}>
-          <Link to="/admin/bookings" style={{ textDecoration: 'none' }}>
-            <div style={{
-              padding: 'var(--spacing-lg)',
-              backgroundColor: '#f0f8ff',
-              borderRadius: 'var(--border-radius)',
-              textAlign: 'center',
-              border: '2px solid #b3d9ff',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}>
-              <h4 style={{ margin: '0 0 8px 0', color: '#0066cc' }}>📊 All Bookings</h4>
-              <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>
+          {/* Quick Actions */}
+          <div className="quick-actions-grid">
+            <Link to="/admin/bookings" className="action-card action-card-bookings">
+              <h4 className="action-title action-title-bookings">📊 All Bookings</h4>
+              <p className="action-description">
                 Manage and view all appointments
               </p>
-            </div>
-          </Link>
-          
-          <Link to="/admin/staff" style={{ textDecoration: 'none' }}>
-            <div style={{
-              padding: 'var(--spacing-lg)',
-              backgroundColor: '#f8fff0',
-              borderRadius: 'var(--border-radius)',
-              textAlign: 'center',
-              border: '2px solid #c8e6c9',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}>
-              <h4 style={{ margin: '0 0 8px 0', color: '#2e7d32' }}>👥 Staff Management</h4>
-              <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>
+            </Link>
+            
+            <Link to="/admin/staff" className="action-card action-card-staff">
+              <h4 className="action-title action-title-staff">👥 Staff Management</h4>
+              <p className="action-description">
                 Manage staff members and schedules
               </p>
-            </div>
-          </Link>
-          
-          <Link to="/admin/services" style={{ textDecoration: 'none' }}>
-            <div style={{
-              padding: 'var(--spacing-lg)',
-              backgroundColor: '#fff0f5',
-              borderRadius: 'var(--border-radius)',
-              textAlign: 'center',
-              border: '2px solid #f8bbd9',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}>
-              <h4 style={{ margin: '0 0 8px 0', color: '#c2185b' }}>💅 Services</h4>
-              <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>
+            </Link>
+            
+            <Link to="/admin/services" className="action-card action-card-services">
+              <h4 className="action-title action-title-services">💅 Services</h4>
+              <p className="action-description">
                 Manage services and pricing
               </p>
-            </div>
-          </Link>
-        </div>
-
-        {/* Recent Bookings Section */}
-        <section style={{ marginBottom: 'var(--spacing-xl)' }}>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            marginBottom: 'var(--spacing-md)' 
-          }}>
-            <h3 style={{ 
-              fontSize: '1.8rem', 
-              fontFamily: 'var(--font-family-serif)',
-              color: 'var(--text-primary)',
-              margin: 0
-            }}>
-              Recent Bookings
-            </h3>
-            <Link to="/admin/bookings">
-              <Button variant="primary" size="medium">
-                View All Bookings
-              </Button>
             </Link>
           </div>
 
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px' }}>
-              <p>Loading recent bookings...</p>
+          {/* Recent Bookings Section */}
+          <section className="recent-bookings-section">
+            <div className="recent-bookings-header">
+              <h3 className="recent-bookings-title">
+                Recent Bookings
+              </h3>
+              <Link to="/admin/bookings">
+                <Button variant="primary" size="medium">
+                  View All Bookings
+                </Button>
+              </Link>
             </div>
-          ) : recentBookings.length > 0 ? (
-            <Table data={recentBookings} columns={bookingColumns} />
-          ) : (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: 'var(--spacing-xl)',
-              backgroundColor: 'var(--gray-50)',
-              borderRadius: 'var(--border-radius)'
-            }}>
-              <p style={{ 
-                color: 'var(--text-secondary)',
-                marginBottom: 'var(--spacing-md)'
-              }}>
-                No recent bookings found.
-              </p>
-              <p style={{ 
-                color: 'var(--text-secondary)',
-                fontSize: '0.875rem'
-              }}>
-                When customers book appointments, they will appear here.
-              </p>
-            </div>
-          )}
-        </section>
+
+            {loading ? (
+              <div className="dashboard-loading">
+                <p>Loading recent bookings...</p>
+              </div>
+            ) : recentBookings.length > 0 ? (
+              <div className="table-responsive">
+                <Table 
+                  data={recentBookings} 
+                  columns={bookingColumns}
+                  className="booking-table"
+                />
+              </div>
+            ) : (
+              <div className="dashboard-empty-state">
+                <p className="empty-state-message">
+                  No recent bookings found.
+                </p>
+                <p className="empty-state-subtext">
+                  When customers book appointments, they will appear here.
+                </p>
+              </div>
+            )}
+          </section>
+        </div>
       </div>
-    </>
+    </div>
   );
 };
 

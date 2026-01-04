@@ -8,8 +8,9 @@ import Button from '@components/common/Button';
 import Modal from '@components/common/Modal';
 import { useModal } from '@hooks/useModal';
 import { Booking, BookingStatus } from '@models/booking';
-import { formatCurrency, formatDate } from '@utils/helpers';
+import { formatCurrency } from '@utils/helpers';
 import { supabase } from '../../supabaseClient';
+import '../../assets/styles/customerdashboards.css';
 
 interface BookingWithRelations extends Booking {
   service_name: string;
@@ -269,11 +270,21 @@ const CustomerDashboard: React.FC = () => {
     if (!date) return 'N/A';
     
     const dateObj = new Date(date);
-    const formattedDate = dateObj.toLocaleDateString();
+    const formattedDate = dateObj.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
     
     if (!time) return formattedDate;
     
-    return `${formattedDate} at ${time}`;
+    // Parse the time and format it properly
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    
+    return `${formattedDate} at ${displayHour}:${minutes} ${ampm}`;
   };
 
   // Since we're only fetching pending and confirmed bookings, all bookings are upcoming
@@ -304,18 +315,7 @@ const CustomerDashboard: React.FC = () => {
       header: 'Status', 
       key: 'status',
       render: (item: BookingWithRelations) => (
-        <span style={{ 
-          padding: '4px 8px', 
-          borderRadius: '12px', 
-          fontSize: '12px',
-          fontWeight: 'bold',
-          backgroundColor: 
-            item.status === 'confirmed' ? '#e8f5e8' :
-            item.status === 'pending' ? '#fff3e0' : '#e3f2fd',
-          color: 
-            item.status === 'confirmed' ? '#2e7d32' :
-            item.status === 'pending' ? '#f57c00' : '#1565c0'
-        }}>
+        <span className={`booking-status-badge booking-status-badge-${item.status}`}>
           {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
         </span>
       )
@@ -324,7 +324,7 @@ const CustomerDashboard: React.FC = () => {
       header: 'Actions',
       key: 'actions',
       render: (item: BookingWithRelations) => (
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div className="booking-actions">
           <Button variant="secondary" size="small" onClick={() => handleRescheduleClick(item)}>
             Reschedule
           </Button>
@@ -332,7 +332,7 @@ const CustomerDashboard: React.FC = () => {
             variant="text" 
             size="small" 
             onClick={() => handleCancelClick(item)} 
-            style={{ color: '#d32f2f' }}
+            className="cancel-button"
           >
             Cancel
           </Button>
@@ -342,181 +342,100 @@ const CustomerDashboard: React.FC = () => {
   ];
 
   return (
-    <>
-      <DashboardHeader title={`Welcome, ${user?.first_name}!`} />
-      <div className="page-container">
-        {/* Quick Stats */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-          gap: 'var(--spacing-md)',
-          marginBottom: 'var(--spacing-xl)'
-        }}>
-          <div style={{
-            padding: 'var(--spacing-lg)',
-            backgroundColor: 'var(--primary-light)',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid var(--primary)'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '2rem', color: 'var(--primary)' }}>
-              {upcomingBookings.length}
-            </h3>
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>Upcoming Appointments</p>
-          </div>
-          <div style={{
-            padding: 'var(--spacing-lg)',
-            backgroundColor: '#fff3e0',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #ffb74d'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '2rem', color: '#f57c00' }}>
-              {upcomingBookings.filter(b => b.status === 'pending').length}
-            </h3>
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>Pending</p>
-          </div>
-          <div style={{
-            padding: 'var(--spacing-lg)',
-            backgroundColor: '#e8f5e8',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #81c784'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '2rem', color: '#2e7d32' }}>
-              {upcomingBookings.filter(b => b.status === 'confirmed').length}
-            </h3>
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>Confirmed</p>
-          </div>
-        </div>
-       
-        {/* Error/Success Messages */}
-        {error && (
-          <div style={{
-            backgroundColor: '#fee',
-            border: '1px solid #f5c6cb',
-            color: '#721c24',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '16px',
-            textAlign: 'center'
-          }}>
-            {error}
-          </div>
-        )}
-        {success && (
-          <div style={{
-            backgroundColor: '#e8f5e8',
-            color: '#2e7d32',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: 'var(--spacing-md)',
-            border: '1px solid #c8e6c9',
-            textAlign: 'center'
-          }}>
-            {success}
-          </div>
-        )}
-
-        {/* Upcoming Bookings Section */}
-        <section style={{ marginBottom: 'var(--spacing-xl)' }}>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            marginBottom: 'var(--spacing-md)' 
-          }}>
-            <h2 style={{ 
-              fontSize: '1.8rem', 
-              fontFamily: 'var(--font-family-serif)',
-              color: 'var(--text-primary)',
-              margin: 0
-            }}>
-              Upcoming Bookings
-            </h2>
-            <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>
-              <Link to="/customer/manage-bookings">
-                <Button variant="secondary" size="medium">
-                  View All Bookings
-                </Button>
-              </Link>
-              <Link to="/customer/book">
-                <Button variant="primary" size="medium">
-                  Book New Appointment
-                </Button>
-              </Link>
-            </div>
-          </div>
-
-          {bookingsLoading ? (
-            <div style={{ textAlign: 'center', padding: '40px' }}>
-              <p>Loading your bookings...</p>
-            </div>
-          ) : upcomingBookings.length > 0 ? (
-            <Table data={upcomingBookings} columns={upcomingColumns} />
-          ) : (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: 'var(--spacing-xl)',
-              backgroundColor: '#f9f9f9',
-              borderRadius: 'var(--border-radius)',
-              border: '1px solid #e0e0e0'
-            }}>
-              <p style={{ 
-                color: 'var(--text-secondary)',
-                marginBottom: 'var(--spacing-md)'
-              }}>
-                No upcoming bookings found.
-              </p>
-              <Link to="/customer/book">
-                <Button variant="primary" size="medium">
-                  Book Your First Appointment
-                </Button>
-              </Link>
+    <div className="dashboard-layout-container">
+      <div className="dashboard-main-content">
+        <DashboardHeader title={`Welcome, ${user?.first_name}!`} />
+        
+        <div className="dashboard-content-wrapper">
+          {/* Error/Success Messages */}
+          {error && (
+            <div className="dashboard-error">
+              {error}
             </div>
           )}
-        </section>
-
-        {/* Quick Actions */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
-          gap: 'var(--spacing-md)',
-          marginBottom: 'var(--spacing-xl)'
-        }}>
-          <Link to="/customer/book" style={{ textDecoration: 'none' }}>
-            <div style={{
-              padding: 'var(--spacing-lg)',
-              backgroundColor: '#f0f8ff',
-              borderRadius: 'var(--border-radius)',
-              textAlign: 'center',
-              border: '2px solid #b3d9ff',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}>
-              <h4 style={{ margin: '0 0 8px 0', color: '#0066cc' }}>📅 Book New Appointment</h4>
-              <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>
-                Schedule a new beauty or wellness service
-              </p>
-            </div>
-          </Link>
           
-          <Link to="/customer/manage-bookings" style={{ textDecoration: 'none' }}>
-            <div style={{
-              padding: 'var(--spacing-lg)',
-              backgroundColor: '#f8fff0',
-              borderRadius: 'var(--border-radius)',
-              textAlign: 'center',
-              border: '2px solid #c8e6c9',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}>
-              <h4 style={{ margin: '0 0 8px 0', color: '#2e7d32' }}>📊 View All Bookings</h4>
-              <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>
-                See your complete booking history
-              </p>
+          {success && (
+            <div className="dashboard-success">
+              {success}
             </div>
-          </Link>
+          )}
+
+          {/* Quick Stats */}
+          <div className="stats-grid">
+            <div className="stat-card upcoming-card">
+              <h3 className="stat-number">{upcomingBookings.length}</h3>
+              <p className="stat-label">Upcoming Appointments</p>
+            </div>
+            <div className="stat-card pending-card">
+              <h3 className="stat-number">{upcomingBookings.filter(b => b.status === 'pending').length}</h3>
+              <p className="stat-label">Pending</p>
+            </div>
+            <div className="stat-card confirmed-card">
+              <h3 className="stat-number">{upcomingBookings.filter(b => b.status === 'confirmed').length}</h3>
+              <p className="stat-label">Confirmed</p>
+            </div>
+          </div>
+
+          {/* Upcoming Bookings Section */}
+          <section className="upcoming-bookings-section">
+            <div className="section-header">
+              <h2 className="section-title">
+                Upcoming Bookings
+              </h2>
+              <div className="section-actions">
+                <Link to="/customer/manage-bookings">
+                  <Button variant="secondary" size="medium" className="view-all-button">
+                    View All Bookings
+                  </Button>
+                </Link>
+                <Link to="/customer/book">
+                  <Button variant="primary" size="medium" className="book-new-button">
+                    Book New Appointment
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            {bookingsLoading ? (
+              <div className="dashboard-loading">
+                <p>Loading your bookings...</p>
+              </div>
+            ) : upcomingBookings.length > 0 ? (
+              <Table data={upcomingBookings} columns={upcomingColumns} />
+            ) : (
+              <div className="empty-booking-state">
+                <p className="empty-message">
+                  No upcoming bookings found.
+                </p>
+                <Link to="/customer/book">
+                  <Button variant="primary" size="medium" className="book-first-button">
+                    Book Your First Appointment
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </section>
+
+          {/* Quick Actions */}
+          <div className="quick-actions-grid">
+            <Link to="/customer/book" className="quick-action-link">
+              <div className="quick-action-card book-action-card">
+                <h4 className="action-title">📅 Book New Appointment</h4>
+                <p className="action-description">
+                  Schedule a new beauty or wellness service
+                </p>
+              </div>
+            </Link>
+            
+            <Link to="/customer/manage-bookings" className="quick-action-link">
+              <div className="quick-action-card view-action-card">
+                <h4 className="action-title">📊 View All Bookings</h4>
+                <p className="action-description">
+                  See your complete booking history
+                </p>
+              </div>
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -525,10 +444,10 @@ const CustomerDashboard: React.FC = () => {
         {selectedBooking && (
           <>
             <p>Are you sure you want to cancel your appointment for <strong>{selectedBooking.service_name}</strong> on <strong>{formatDateTime(selectedBooking.booking_date, selectedBooking.booking_time)}</strong>?</p>
-            <p style={{ color: '#666', fontSize: '14px' }}>
+            <p className="modal-note">
               This action cannot be undone.
             </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
+            <div className="modal-actions">
               <Button variant="secondary" onClick={closeCancelModal} disabled={loading}>
                 No, Keep It
               </Button>
@@ -544,19 +463,12 @@ const CustomerDashboard: React.FC = () => {
       <Modal isOpen={isRescheduleModalOpen} onClose={closeRescheduleModal} title="Reschedule Appointment">
         {selectedBooking && (
           <>
-            <p style={{marginBottom: 'var(--spacing-md)'}}>
+            <p className="modal-description">
               Reschedule <strong>{selectedBooking.service_name}</strong> currently on <strong>{formatDateTime(selectedBooking.booking_date, selectedBooking.booking_time)}</strong>.
             </p>
-            <p style={{ 
-              backgroundColor: '#fff3e0', 
-              padding: '12px', 
-              borderRadius: '4px', 
-              marginBottom: '16px',
-              fontSize: '14px',
-              border: '1px solid #ffb74d'
-            }}>
+            <div className="reschedule-note">
               <strong>Note:</strong> After rescheduling, your booking status will change to <strong>pending</strong> and will require admin approval.
-            </p>
+            </div>
             <form onSubmit={handleConfirmReschedule} className="contact-form">
               <div className="form-group">
                 <label htmlFor="reschedule-date">New Date *</label>
@@ -581,7 +493,7 @@ const CustomerDashboard: React.FC = () => {
                   disabled={!rescheduleDate}
                 >
                   <option value="">
-                    -- {rescheduleDate ? 'Select a Time' : 'Select a date first'} --
+                    {!rescheduleDate ? 'Select a date first' : 'Select a Time'}
                   </option>
                   {getAvailableTimeSlots().map(time => (
                     <option key={time} value={time}>
@@ -592,38 +504,26 @@ const CustomerDashboard: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+                <small className="time-slot-note">
                   {rescheduleDate === new Date().toISOString().split('T')[0] 
                     ? `Today's available time slots (current time: ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')})`
                     : 'Business hours: 9:00 AM - 6:00 PM'
                   }
                 </small>
                 {rescheduleDate && getAvailableTimeSlots().length === 0 && (
-                  <small style={{ color: '#d32f2f', marginTop: '4px', display: 'block' }}>
+                  <small className="error-note">
                     No available time slots for the selected date. Please choose another date.
                   </small>
                 )}
               </div>
 
               {error && (
-                <div style={{
-                  backgroundColor: '#fee',
-                  border: '1px solid #f5c6cb',
-                  color: '#721c24',
-                  padding: '12px',
-                  borderRadius: '4px',
-                  marginBottom: '16px'
-                }}>
+                <div className="form-error">
                   {error}
                 </div>
               )}
 
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                gap: 'var(--spacing-md)', 
-                marginTop: 'var(--spacing-lg)' 
-              }}>
+              <div className="modal-actions">
                 <Button variant="secondary" onClick={closeRescheduleModal} disabled={loading}>
                   Cancel
                 </Button>
@@ -635,7 +535,7 @@ const CustomerDashboard: React.FC = () => {
           </>
         )}
       </Modal>
-    </>
+    </div>
   );
 };
 

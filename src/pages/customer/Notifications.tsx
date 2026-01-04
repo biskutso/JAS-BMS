@@ -5,6 +5,7 @@ import { useAuth } from '@context/AuthContext';
 import { formatDate } from '@utils/helpers';
 import Button from '@components/common/Button';
 import { supabase } from '../../supabaseClient';
+import '../../assets/styles/customerdashboards.css';
 
 interface Notification {
   id: string;
@@ -353,201 +354,252 @@ const Notifications: React.FC = () => {
 
   if (loading) {
     return (
-      <>
-        <DashboardHeader title="Your Notifications" />
-        <div className="page-container">
-          <p>Loading notifications...</p>
+      <div className="dashboard-layout-container">
+        <div className="dashboard-main-content">
+          <div className="dashboard-content-wrapper">
+            <DashboardHeader title="Your Notifications" />
+            <div className="booking-header">
+              <h1 className="page-title">Notifications</h1>
+            </div>
+            <div className="dashboard-loading">
+              <p>Loading notifications...</p>
+            </div>
+          </div>
         </div>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
-      <DashboardHeader title="Your Notifications" />
-      <div className="page-container">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-lg)' }}>
-          <p className="section-subtitle" style={{ textAlign: 'left', margin: 0 }}>
-            Stay updated with your appointments, special offers, and important announcements.
-            {unreadCount > 0 && (
-              <span style={{ 
-                marginLeft: '8px', 
-                backgroundColor: 'var(--color-accent)', 
-                color: 'white', 
-                padding: '2px 8px', 
-                borderRadius: '12px',
-                fontSize: '0.8rem'
-              }}>
-                {unreadCount} new
-              </span>
-            )}
-          </p>
+    <div className="dashboard-layout-container">
+      <div className="dashboard-main-content">
+        <div className="dashboard-content-wrapper">
+          <DashboardHeader title="Your Notifications" />
           
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {notifications.length > 0 && (
-              <>
-                {unreadCount > 0 && (
-                  <Button variant="secondary" size="small" onClick={markAllAsRead}>
-                    Mark all as read
-                  </Button>
-                )}
-                {readCount > 0 && (
-                  <Button 
-                    variant="text" 
-                    size="small" 
-                    onClick={deleteAllReadNotifications}
-                    style={{ color: '#666' }}
-                  >
-                    Delete read ({readCount})
-                  </Button>
-                )}
-                <Button 
-                  variant="text" 
-                  size="small" 
-                  onClick={deleteAllNotifications}
-                  style={{ color: '#d32f2f' }}
-                >
-                  Delete all
-                </Button>
-              </>
-            )}
+          <div className="booking-header">
+            <h1 className="page-title">Notifications</h1>
+            <p className="page-subtitle">
+              Stay updated with your appointments, special offers, and important announcements.
+            </p>
           </div>
-        </div>
-
-        {/* Success Message */}
-        {success && (
-          <div style={{
-            backgroundColor: '#e8f5e8',
-            border: '1px solid #c8e6c9',
-            color: '#2e7d32',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '16px',
-            textAlign: 'center'
-          }}>
-            {success}
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <div style={{
-            backgroundColor: '#fee',
-            border: '1px solid #f5c6cb',
-            color: '#721c24',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '16px',
-            textAlign: 'center'
-          }}>
-            {error}
-            <Button 
-              variant="text" 
-              size="small" 
-              onClick={fetchNotifications}
-              style={{ marginLeft: '8px' }}
-            >
-              Try Again
-            </Button>
-          </div>
-        )}
-
-        <div className="notifications-list">
-          {notifications.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px' }}>
-              <p>No notifications found.</p>
-              <p style={{ fontSize: '0.875rem', color: '#666', marginTop: '8px' }}>
-                Notifications will appear here when staff update your booking status.
-              </p>
+          
+          {/* Header Actions */}
+          <div className="section-header">
+            <div className="section-info">
+              <h2 className="section-title">Your Notifications</h2>
+              {unreadCount > 0 && (
+                <span className="unread-badge">
+                  {unreadCount} new
+                </span>
+              )}
             </div>
-          ) : (
-            notifications.map(notif => (
-              <div
-                key={notif.id}
-                className={`notification-item ${notif.read ? 'read' : 'unread'}`}
-                style={{
-                  padding: 'var(--spacing-sm) var(--spacing-md)',
-                  borderBottom: '1px solid var(--color-border)',
-                  backgroundColor: notif.read ? 'var(--color-background)' : '#fff9f5',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: 'var(--spacing-md)',
-                  transition: 'background-color 0.2s ease',
-                }}
-              >
-                <div 
-                  style={{ flexGrow: 1, cursor: 'pointer' }}
-                  onClick={() => !notif.read && markAsRead(notif.id)}
-                >
-                  <p style={{ 
-                    fontWeight: notif.read ? 'normal' : 'bold', 
-                    color: 'var(--color-primary-dark)', 
-                    marginBottom: '4px' 
-                  }}>
-                    {notif.message}
-                  </p>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
-                    {formatDate(notif.created_at)}
-                  </span>
-                </div>
-                
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  {!notif.read && (
+            
+            {/* Action Buttons */}
+            <div className="section-actions">
+              {notifications.length > 0 && (
+                <>
+                  {unreadCount > 0 && (
+                    <Button 
+                      variant="secondary" 
+                      size="small" 
+                      onClick={markAllAsRead}
+                      className="view-all-button"
+                    >
+                      Mark all as read
+                    </Button>
+                  )}
+                  {readCount > 0 && (
                     <Button 
                       variant="text" 
-                      size="small"
-                      onClick={() => markAsRead(notif.id)}
-                      style={{ fontSize: '12px' }}
+                      size="small" 
+                      onClick={deleteAllReadNotifications}
+                      className="delete-read-button"
                     >
-                      Mark as Read
+                      Delete read ({readCount})
                     </Button>
                   )}
                   <Button 
                     variant="text" 
-                    size="small"
-                    onClick={() => deleteNotification(notif.id)}
-                    style={{ 
-                      fontSize: '12px', 
-                      color: '#d32f2f',
-                      minWidth: 'auto'
-                    }}
-                    title="Delete notification"
+                    size="small" 
+                    onClick={deleteAllNotifications}
+                    className="delete-all-button"
                   >
-                    🗑️
+                    Delete all
                   </Button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Success Message */}
+          {success && (
+            <div className="dashboard-success">
+              {success}
+            </div>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="dashboard-error">
+              {error}
+              <Button 
+                variant="text" 
+                size="small" 
+                onClick={fetchNotifications}
+                className="retry-button"
+              >
+                Try Again
+              </Button>
+            </div>
+          )}
+
+          {/* Notifications List */}
+          <div className="upcoming-bookings-section">
+            {notifications.length === 0 ? (
+              <div className="empty-booking-state">
+                <p className="empty-message">No notifications found.</p>
+                <p className="empty-subtext">
+                  Notifications will appear here when staff update your booking status.
+                </p>
+              </div>
+            ) : (
+              <div className="notifications-list">
+                {notifications.map(notif => (
+                  <div
+                    key={notif.id}
+                    className={`notification-item ${notif.read ? 'read' : 'unread'}`}
+                    style={{
+                      padding: 'var(--spacing-sm) var(--spacing-md)',
+                      borderBottom: '1px solid var(--color-border)',
+                      backgroundColor: notif.read ? 'var(--color-background)' : '#fff9f5',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: 'var(--spacing-md)',
+                      transition: 'background-color 0.2s ease',
+                    }}
+                  >
+                    <div 
+                      className="notification-content"
+                      style={{ flexGrow: 1 }}
+                      onClick={() => !notif.read && markAsRead(notif.id)}
+                    >
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        marginBottom: '4px',
+                        gap: '8px'
+                      }}>
+                        {!notif.read && (
+                          <span className="unread-dot"></span>
+                        )}
+                        <p style={{ 
+                          fontWeight: notif.read ? 'normal' : 'bold', 
+                          color: 'var(--color-primary-dark)', 
+                          margin: 0,
+                          fontSize: '14px'
+                        }}>
+                          {notif.message}
+                        </p>
+                      </div>
+                      <span style={{ 
+                        fontSize: '0.8rem', 
+                        color: 'var(--color-text-light)',
+                        display: 'block',
+                        marginTop: '2px'
+                      }}>
+                        {formatDate(notif.created_at)}
+                      </span>
+                    </div>
+                    
+                    <div className="notification-actions" style={{ 
+                      display: 'flex', 
+                      gap: '8px', 
+                      alignItems: 'center',
+                      flexShrink: 0
+                    }}>
+                      {!notif.read && (
+                        <Button 
+                          variant="text" 
+                          size="small"
+                          onClick={() => markAsRead(notif.id)}
+                          className="mark-read-button"
+                          style={{ fontSize: '12px' }}
+                        >
+                          Mark Read
+                        </Button>
+                      )}
+                      <button 
+                        onClick={() => deleteNotification(notif.id)}
+                        className="delete-notification-button"
+                        title="Delete notification"
+                        style={{ 
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: '#d32f2f',
+                          fontSize: '14px',
+                          padding: '4px',
+                          borderRadius: '4px',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ffebee'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Quick Stats */}
+          {notifications.length > 0 && (
+            <div className="quick-actions-grid" style={{ marginTop: 'var(--spacing-lg)' }}>
+              <div className="quick-action-card stat-card upcoming-card">
+                <p className="stat-number">{notifications.length}</p>
+                <p className="stat-label">Total Notifications</p>
+              </div>
+              <div className="quick-action-card stat-card pending-card">
+                <p className="stat-number">{unreadCount}</p>
+                <p className="stat-label">Unread Notifications</p>
+              </div>
+              <div className="quick-action-card stat-card confirmed-card">
+                <p className="stat-number">{readCount}</p>
+                <p className="stat-label">Read Notifications</p>
+              </div>
+            </div>
+          )}
+
+          {/* Information Banner */}
+          {notifications.length > 0 && (
+            <div className="booking-info-banner">
+              <h3 className="banner-title">Notification Tips</h3>
+              <p className="banner-text">
+                Notifications are automatically sent when your booking status changes.
+                You'll receive updates for confirmations, cancellations, and reminders.
+              </p>
+              <div className="banner-features">
+                <div className="feature-item">
+                  <span className="feature-icon">📅</span>
+                  <span className="feature-text">Booking updates</span>
+                </div>
+                <div className="feature-item">
+                  <span className="feature-icon">⏰</span>
+                  <span className="feature-text">Appointment reminders</span>
+                </div>
+                <div className="feature-item">
+                  <span className="feature-icon">📢</span>
+                  <span className="feature-text">Special offers</span>
                 </div>
               </div>
-            ))
+            </div>
           )}
         </div>
-
-        {/* Quick Stats */}
-        {notifications.length > 0 && (
-          <div style={{ 
-            marginTop: 'var(--spacing-xl)',
-            padding: 'var(--spacing-md)',
-            backgroundColor: '#f8f9fa',
-            borderRadius: 'var(--border-radius)',
-            border: '1px solid #e9ecef',
-            fontSize: '0.875rem',
-            textAlign: 'center'
-          }}>
-            <strong>Notification Summary:</strong> 
-            <span style={{ margin: '0 12px' }}>
-              📥 Total: <strong>{notifications.length}</strong>
-            </span>
-            <span style={{ margin: '0 12px' }}>
-              📬 Unread: <strong>{unreadCount}</strong>
-            </span>
-            <span style={{ margin: '0 12px' }}>
-              📭 Read: <strong>{readCount}</strong>
-            </span>
-          </div>
-        )}
       </div>
-    </>
+    </div>
   );
 };
 

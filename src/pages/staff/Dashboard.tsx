@@ -8,6 +8,7 @@ import { Booking, BookingStatus } from '@models/booking';
 import { formatCurrency, formatDate } from '@utils/helpers';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
+import "../../assets/styles/staffdashboards.css";
 
 interface BookingWithRelations extends Booking {
   service_name: string;
@@ -27,7 +28,7 @@ const StaffDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch customer details - FIXED: Using correct table structure
+  // Fetch customer details
   const fetchCustomerDetails = async (customerIds: string[]) => {
     try {
       console.log('🔄 Fetching customer details for IDs:', customerIds);
@@ -39,7 +40,6 @@ const StaffDashboard: React.FC = () => {
 
       if (error) {
         console.error('❌ Error fetching customer details:', error);
-        // Return fallback data
         return customerIds.map(id => ({
           id,
           first_name: 'Customer',
@@ -51,7 +51,6 @@ const StaffDashboard: React.FC = () => {
 
       console.log('✅ Customer details fetched:', data);
 
-      // If no data found, return fallback
       if (!data || data.length === 0) {
         return customerIds.map(id => ({
           id,
@@ -67,7 +66,7 @@ const StaffDashboard: React.FC = () => {
         first_name: user.first_name || 'Customer',
         last_name: user.last_name || '',
         email: user.email || 'unknown@example.com',
-        phone: 'Unknown' // Your users table doesn't have phone column
+        phone: 'Unknown'
       }));
 
     } catch (err) {
@@ -82,7 +81,7 @@ const StaffDashboard: React.FC = () => {
     }
   };
 
-  // Fetch staff bookings from Supabase - FIXED: Using correct table structure
+  // Fetch staff bookings from Supabase
   const fetchStaffBookings = async () => {
     try {
       setLoading(true);
@@ -95,7 +94,6 @@ const StaffDashboard: React.FC = () => {
 
       console.log('🔄 Fetching bookings for staff:', user.id);
 
-      // Get bookings for this staff member
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
@@ -110,9 +108,7 @@ const StaffDashboard: React.FC = () => {
 
       console.log('✅ Staff bookings fetched:', data);
 
-      // If we have bookings, fetch related data
       if (data && data.length > 0) {
-        // Fetch service details
         const serviceIds = [...new Set(data.map(booking => booking.service_id))];
         console.log('🔄 Fetching services for IDs:', serviceIds);
         
@@ -127,11 +123,9 @@ const StaffDashboard: React.FC = () => {
 
         console.log('✅ Services fetched:', servicesData);
 
-        // Fetch customer details
         const customerIds = [...new Set(data.map(booking => booking.customer_id))];
         const customersData = await fetchCustomerDetails(customerIds);
 
-        // Transform data
         const staffBookings: BookingWithRelations[] = data.map(booking => {
           const service = servicesData?.find(s => s.id === booking.service_id);
           const customer = customersData?.find(c => c.id === booking.customer_id);
@@ -147,7 +141,7 @@ const StaffDashboard: React.FC = () => {
             customerName: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
             customer_name: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
             customer_email: customer?.email || '',
-            customer_phone: customer?.phone || 'Unknown', // Your users table doesn't have phone
+            customer_phone: customer?.phone || 'Unknown',
             staffId: booking.staff_id,
             staffName: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
             staff_name: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
@@ -178,7 +172,6 @@ const StaffDashboard: React.FC = () => {
     fetchStaffBookings();
   }, [user]);
 
-  // Format date and time for display
   const formatDateTime = (date: string, time: string) => {
     if (!date) return 'N/A';
     
@@ -207,7 +200,7 @@ const StaffDashboard: React.FC = () => {
       render: (item: BookingWithRelations) => (
         <div>
           <div style={{ fontWeight: '500' }}>{item.customer_name}</div>
-          <div style={{ fontSize: '0.875rem', color: '#666' }}>
+          <div className="customer-email">
             ✉️ {item.customer_email}
           </div>
         </div>
@@ -226,24 +219,17 @@ const StaffDashboard: React.FC = () => {
     { 
       header: 'Status', 
       key: 'status',
-      render: (item: BookingWithRelations) => (
-        <span style={{ 
-          padding: '4px 8px', 
-          borderRadius: '12px', 
-          fontSize: '12px',
-          fontWeight: 'bold',
-          backgroundColor: 
-            item.status === 'confirmed' ? '#e8f5e8' :
-            item.status === 'completed' ? '#e3f2fd' :
-            item.status === 'cancelled' ? '#ffebee' : '#fff3e0',
-          color: 
-            item.status === 'confirmed' ? '#2e7d32' :
-            item.status === 'completed' ? '#1565c0' :
-            item.status === 'cancelled' ? '#c62828' : '#f57c00'
-        }}>
-          {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-        </span>
-      )
+      render: (item: BookingWithRelations) => {
+        const statusClass = item.status === 'confirmed' ? 'booking-status-badge-confirmed' :
+                           item.status === 'completed' ? 'booking-status-badge-completed' :
+                           item.status === 'cancelled' ? 'booking-status-badge-cancelled' : 'booking-status-badge-pending';
+        
+        return (
+          <span className={`booking-status-badge ${statusClass}`}>
+            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+          </span>
+        );
+      }
     },
     {
       header: 'Actions',
@@ -251,20 +237,24 @@ const StaffDashboard: React.FC = () => {
       render: (item: BookingWithRelations) => (
         (item.status === 'pending' || item.status === 'confirmed') ? (
           <Link to="/staff/update-status">
-            <Button variant="secondary" size="small">Manage</Button>
+            <Button 
+              variant="secondary" 
+              size="small" 
+              className="manage-button"
+            >
+              Manage
+            </Button>
           </Link>
         ) : (
-          <span style={{ color: '#666', fontStyle: 'italic' }}>Completed</span>
+          <span className="completed-label">Completed</span>
         )
       )
     },
   ];
 
-  // Filter bookings
   const upcomingBookings = bookings.filter(b => b.status === 'pending' || b.status === 'confirmed');
   const recentBookings = bookings.filter(b => b.status === 'completed' || b.status === 'cancelled');
 
-  // Quick stats
   const today = new Date().toISOString().split('T')[0];
   const todaysBookings = bookings.filter(b => b.booking_date === today);
   const pendingBookings = bookings.filter(b => b.status === 'pending').length;
@@ -272,241 +262,145 @@ const StaffDashboard: React.FC = () => {
   const completedBookings = bookings.filter(b => b.status === 'completed').length;
 
   return (
-    <>
-      <DashboardHeader title={`Welcome, ${user?.first_name || 'Staff'}!`} />
-      <div className="page-container">
-        {/* Error Message */}
-        {error && (
-          <div style={{
-            backgroundColor: '#fee',
-            border: '1px solid #f5c6cb',
-            color: '#721c24',
-            padding: '12px',
-            borderRadius: '4px',
-            marginBottom: '16px',
-            textAlign: 'center'
-          }}>
-            {error}
-            <div style={{ marginTop: '8px' }}>
-              <Button 
-                variant="text" 
-                size="small" 
-                onClick={fetchStaffBookings}
-                style={{ fontSize: '12px' }}
-              >
-                Try Again
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Quick Stats */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-          gap: 'var(--spacing-md)',
-          marginBottom: 'var(--spacing-xl)'
-        }}>
-          <div style={{
-            padding: 'var(--spacing-lg)',
-            backgroundColor: 'var(--primary-light)',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid var(--primary)'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '2rem', color: 'var(--primary)' }}>
-              {todaysBookings.length}
-            </h3>
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>Today's Appointments</p>
-          </div>
-          <div style={{
-            padding: 'var(--spacing-lg)',
-            backgroundColor: '#fff3e0',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #ffb74d'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '2rem', color: '#f57c00' }}>
-              {pendingBookings}
-            </h3>
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>Pending</p>
-          </div>
-          <div style={{
-            padding: 'var(--spacing-lg)',
-            backgroundColor: '#e8f5e8',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #81c784'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '2rem', color: '#2e7d32' }}>
-              {confirmedBookings}
-            </h3>
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>Confirmed</p>
-          </div>
-          <div style={{
-            padding: 'var(--spacing-lg)',
-            backgroundColor: '#e3f2fd',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            border: '1px solid #64b5f6'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '2rem', color: '#1565c0' }}>
-              {completedBookings}
-            </h3>
-            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>Completed</p>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
-          gap: 'var(--spacing-md)',
-          marginBottom: 'var(--spacing-xl)'
-        }}>
-          <Link to="/staff/schedule" style={{ textDecoration: 'none' }}>
-            <div style={{
-              padding: 'var(--spacing-lg)',
-              backgroundColor: '#f0f8ff',
-              borderRadius: 'var(--border-radius)',
-              textAlign: 'center',
-              border: '2px solid #b3d9ff',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}>
-              <h4 style={{ margin: '0 0 8px 0', color: '#0066cc' }}>📅 View Schedule</h4>
-              <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>
-                Check your daily appointments and availability
-              </p>
-            </div>
-          </Link>
+    <div className="dashboard-layout-container">
+      <div className="dashboard-main-content">
+        <div className="dashboard-content-wrapper">
+          <DashboardHeader title={`Welcome, ${user?.first_name || 'Staff'}!`} />
           
-          <Link to="/staff/update-status" style={{ textDecoration: 'none' }}>
-            <div style={{
-              padding: 'var(--spacing-lg)',
-              backgroundColor: '#f8fff0',
-              borderRadius: 'var(--border-radius)',
-              textAlign: 'center',
-              border: '2px solid #c8e6c9',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}>
-              <h4 style={{ margin: '0 0 8px 0', color: '#2e7d32' }}>⚡ Manage Appointments</h4>
-              <p style={{ margin: 0, color: '#666', fontSize: '0.875rem' }}>
-                Update status and manage customer appointments
-              </p>
-            </div>
-          </Link>
-        </div>
+          <div className="booking-header">
+            <h1 className="page-title">Staff Dashboard</h1>
+            <p className="page-subtitle">
+              Manage your appointments, view your schedule, and update booking statuses.
+            </p>
+          </div>
 
-        {/* Upcoming Appointments Section */}
-        <section style={{ marginBottom: 'var(--spacing-xl)' }}>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            marginBottom: 'var(--spacing-md)' 
-          }}>
-            <h2 style={{ 
-              fontSize: '1.8rem', 
-              fontFamily: 'var(--font-family-serif)',
-              color: 'var(--text-primary)',
-              margin: 0
-            }}>
-              Upcoming Appointments ({upcomingBookings.length})
-            </h2>
-            <Link to="/staff/schedule">
-              <Button variant="primary" size="medium">
-                View Full Schedule
-              </Button>
+          {error && (
+            <div className="dashboard-error">
+              {error}
+              <div style={{ marginTop: '8px' }}>
+                <Button 
+                  variant="text" 
+                  size="small" 
+                  onClick={fetchStaffBookings}
+                  className="retry-button"
+                >
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="stats-grid">
+            <div className="stat-card today-card">
+              <p className="stat-number">{todaysBookings.length}</p>
+              <p className="stat-label">Today's Appointments</p>
+            </div>
+            <div className="stat-card pending-card">
+              <p className="stat-number">{pendingBookings}</p>
+              <p className="stat-label">Pending</p>
+            </div>
+            <div className="stat-card confirmed-card">
+              <p className="stat-number">{confirmedBookings}</p>
+              <p className="stat-label">Confirmed</p>
+            </div>
+            <div className="stat-card completed-card">
+              <p className="stat-number">{completedBookings}</p>
+              <p className="stat-label">Completed</p>
+            </div>
+          </div>
+
+          <div className="quick-actions-grid">
+            <Link to="/staff/schedule" className="quick-action-link">
+              <div className="quick-action-card schedule-action-card">
+                <h4 className="action-title">📅 View Schedule</h4>
+                <p className="action-description">
+                  Check your daily appointments and availability
+                </p>
+              </div>
+            </Link>
+            
+            <Link to="/staff/update-status" className="quick-action-link">
+              <div className="quick-action-card manage-action-card">
+                <h4 className="action-title">⚡ Manage Appointments</h4>
+                <p className="action-description">
+                  Update status and manage customer appointments
+                </p>
+              </div>
             </Link>
           </div>
 
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px' }}>
-              <p>Loading your appointments...</p>
+          <div className="upcoming-bookings-section">
+            <div className="section-header">
+              <h2 className="section-title">
+                Upcoming Appointments ({upcomingBookings.length})
+              </h2>
+              <div className="section-actions">
+                <Link to="/staff/schedule">
+                  <Button 
+                    variant="primary" 
+                    size="small" 
+                    className="view-full-button"
+                  >
+                    View Full Schedule
+                  </Button>
+                </Link>
+              </div>
             </div>
-          ) : upcomingBookings.length > 0 ? (
-            <Table data={upcomingBookings} columns={columns} />
-          ) : (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: 'var(--spacing-xl)',
-              backgroundColor: 'var(--gray-50)',
-              borderRadius: 'var(--border-radius)'
-            }}>
-              <p style={{ 
-                color: 'var(--text-secondary)',
-                marginBottom: 'var(--spacing-md)'
-              }}>
-                No upcoming appointments found.
-              </p>
-              <p style={{ 
-                color: 'var(--text-secondary)',
-                fontSize: '0.875rem'
-              }}>
-                When customers book appointments with you, they will appear here.
-              </p>
+
+            {loading ? (
+              <div className="dashboard-loading">
+                <p>Loading your appointments...</p>
+              </div>
+            ) : upcomingBookings.length > 0 ? (
+              <Table data={upcomingBookings} columns={columns} />
+            ) : (
+              <div className="empty-booking-state">
+                <p className="empty-message">No upcoming appointments found.</p>
+                <p className="empty-subtext">
+                  When customers book appointments with you, they will appear here.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {recentBookings.length > 0 && (
+            <div className="recent-bookings-section">
+              <details className="recent-bookings-details">
+                <summary className="recent-bookings-summary">
+                  Recent Appointments ({recentBookings.length})
+                  <span className="dropdown-icon">▼</span>
+                </summary>
+                <div className="recent-bookings-content">
+                  <Table data={recentBookings} columns={columns} />
+                </div>
+              </details>
             </div>
           )}
-        </section>
 
-        {/* Recent Appointments Section */}
-        {recentBookings.length > 0 && (
-          <section>
-            <details style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius)' }}>
-              <summary style={{ 
-                padding: 'var(--spacing-md) var(--spacing-lg)',
-                cursor: 'pointer',
-                fontSize: '1.5rem',
-                fontFamily: 'var(--font-family-serif)',
-                color: 'var(--text-primary)',
-                listStyle: 'none',
-                backgroundColor: 'var(--gray-50)'
-              }}>
-                Recent Appointments ({recentBookings.length})
-                <span style={{ float: 'right', fontSize: '1rem' }}>▼</span>
-              </summary>
-              <div style={{ padding: 'var(--spacing-md) 0' }}>
-                <Table data={recentBookings} columns={columns} />
+          {!loading && bookings.length === 0 && (
+            <div className="welcome-message">
+              <h3>Welcome to Your Staff Dashboard!</h3>
+              <p>
+                This is where you'll manage all your appointments. When customers book services and select you as their preferred staff, 
+                their appointments will appear here.
+              </p>
+              <div className="welcome-actions">
+                <Link to="/staff/schedule">
+                  <Button variant="primary" size="small">
+                    Check Schedule
+                  </Button>
+                </Link>
+                <Link to="/staff/update-status">
+                  <Button variant="secondary" size="small">
+                    Manage Appointments
+                  </Button>
+                </Link>
               </div>
-            </details>
-          </section>
-        )}
-
-        {/* Welcome Message for New Staff */}
-        {!loading && bookings.length === 0 && (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: 'var(--spacing-xl)',
-            backgroundColor: '#f0f8ff',
-            borderRadius: 'var(--border-radius)',
-            border: '1px solid #b3d9ff',
-            marginTop: 'var(--spacing-xl)'
-          }}>
-            <h3 style={{ color: '#0066cc', marginBottom: 'var(--spacing-md)' }}>
-              Welcome to Your Staff Dashboard!
-            </h3>
-            <p style={{ color: '#666', marginBottom: 'var(--spacing-md)' }}>
-              This is where you'll manage all your appointments. When customers book services and select you as their preferred staff, 
-              their appointments will appear here.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--spacing-md)' }}>
-              <Link to="/staff/schedule">
-                <Button variant="primary" size="medium">
-                  Check Schedule
-                </Button>
-              </Link>
-              <Link to="/staff/update-status">
-                <Button variant="secondary" size="medium">
-                  Manage Appointments
-                </Button>
-              </Link>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 };
 
