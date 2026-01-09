@@ -329,15 +329,20 @@ const CancelReschedule: React.FC = () => {
       key: 'actions',
       render: (item: BookingWithRelations) => (
         (item.status === 'pending' || item.status === 'confirmed') ? (
-          <div className="booking-actions">
-            <Button variant="secondary" size="small" onClick={() => handleRescheduleClick(item)}>
+          <div className="booking-actions-stacked">
+            <Button 
+              variant="secondary" 
+              size="small" 
+              onClick={() => handleRescheduleClick(item)}
+              className="action-button"
+            >
               Reschedule
             </Button>
             <Button 
               variant="text" 
               size="small" 
               onClick={() => handleCancelClick(item)} 
-              className="cancel-button"
+              className="cancel-button action-button"
             >
               Cancel
             </Button>
@@ -355,13 +360,6 @@ const CancelReschedule: React.FC = () => {
         <div className="dashboard-content-wrapper">
           <DashboardHeader title="Manage Your Bookings" />
           
-          <div className="booking-header">
-            <h1 className="page-title">Manage Bookings</h1>
-            <p className="page-subtitle">
-              View your upcoming and past appointments. You can reschedule or cancel active bookings.
-            </p>
-          </div>
-          
           {bookingsLoading ? (
             <div className="dashboard-loading">
               <p>Loading your bookings...</p>
@@ -377,7 +375,7 @@ const CancelReschedule: React.FC = () => {
               <p className="empty-message">You don't have any bookings yet.</p>
               <Button 
                 variant="primary" 
-                onClick={() => window.location.href = '/customer/book-appointment'}
+                onClick={() => window.location.href = '/customer/services'}
                 className="book-first-button"
               >
                 Book Your First Appointment
@@ -390,7 +388,7 @@ const CancelReschedule: React.FC = () => {
                 <div className="section-actions">
                   <Button 
                     variant="primary" 
-                    onClick={() => window.location.href = '/customer/book-appointment'}
+                    onClick={() => window.location.href = '/customer/services'}
                     className="book-new-button"
                   >
                     Book New Appointment

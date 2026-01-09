@@ -581,7 +581,7 @@ const ManageInventory: React.FC = () => {
         
         <div className="dashboard-content-wrapper">
           <p className="section-subtitle">
-            Track stock movements and current balances for all salon products.
+            {/* Track stock movements and current balances for all salon products. */}
           </p>
 
           {successMessage && (

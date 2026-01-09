@@ -38,7 +38,7 @@ const LoginSignup: React.FC = () => {
           navigate('/staff/dashboard');
           break;
         default:
-          navigate('/customer/dashboard');
+          navigate('/customer/services');
       }
       setRedirecting(false);
     }

@@ -136,7 +136,7 @@
     transparent 100%);
 }
 
-.section-header {
+.section-headers {
   text-align: center;
   margin-bottom: var(--spacing-xl);
 }

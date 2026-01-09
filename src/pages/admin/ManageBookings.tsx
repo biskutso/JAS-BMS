@@ -1,4 +1,4 @@
-// src/pages/admin/ManageBookings.tsx
+// src/pages/admin/ManageBookings.tsx - UPDATED VERSION
 import React, { useState, useEffect } from 'react';
 import DashboardHeader from '@components/dashboard/DashboardHeader';
 import Table from '@components/dashboard/Table';
@@ -535,6 +535,7 @@ We apologize for any inconvenience.`;
     setSelectedBookingForModal(null);
   };
 
+  // UPDATED COLUMNS WITH SEARCHABLE AND SORTABLE PROPERTIES
   const columns = [
     { 
       header: 'Service', 
@@ -548,7 +549,11 @@ We apologize for any inconvenience.`;
             <span>{item.service_duration}min</span>
           </div>
         </div>
-      )
+      ),
+      searchable: true,
+      sortable: true,
+      sortFn: (a: BookingWithRelations, b: BookingWithRelations) => 
+        a.service_name.localeCompare(b.service_name)
     },
     { 
       header: 'Customer', 
@@ -558,7 +563,11 @@ We apologize for any inconvenience.`;
           <div className="customer-name">{item.customer_name}</div>
           <div className="customer-email">{item.customer_email}</div>
         </div>
-      )
+      ),
+      searchable: true,
+      sortable: true,
+      sortFn: (a: BookingWithRelations, b: BookingWithRelations) => 
+        a.customer_name.localeCompare(b.customer_name)
     },
     { 
       header: 'Staff', 
@@ -570,7 +579,11 @@ We apologize for any inconvenience.`;
             <div className="staff-email">{item.staff_email}</div>
           )}
         </div>
-      )
+      ),
+      searchable: true,
+      sortable: true,
+      sortFn: (a: BookingWithRelations, b: BookingWithRelations) => 
+        (a.staff_name || '').localeCompare(b.staff_name || '')
     },
     { 
       header: 'Date & Time', 
@@ -581,7 +594,14 @@ We apologize for any inconvenience.`;
             {formatDisplayDateTime(item.booking_date, item.booking_time)}
           </div>
         </div>
-      )
+      ),
+      searchable: true,
+      sortable: true,
+      sortFn: (a: BookingWithRelations, b: BookingWithRelations) => {
+        const dateA = new Date(`${a.booking_date}T${a.booking_time}`);
+        const dateB = new Date(`${b.booking_date}T${b.booking_time}`);
+        return dateA.getTime() - dateB.getTime();
+      }
     },
     { 
       header: 'Status', 
@@ -592,7 +612,23 @@ We apologize for any inconvenience.`;
             {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
           </span>
         </div>
-      )
+      ),
+      searchable: true,
+      sortable: true,
+      // Custom status sort function for proper order: Pending → Confirmed → Completed → Cancelled
+      sortFn: (a: BookingWithRelations, b: BookingWithRelations) => {
+        const statusOrder: Record<string, number> = {
+          'pending': 0,
+          'confirmed': 1,
+          'completed': 2,
+          'cancelled': 3
+        };
+        
+        const aOrder = statusOrder[a.status.toLowerCase()] ?? 999;
+        const bOrder = statusOrder[b.status.toLowerCase()] ?? 999;
+        
+        return aOrder - bOrder;
+      }
     },
     {
       header: 'Actions',
@@ -660,7 +696,9 @@ We apologize for any inconvenience.`;
             )}
           </div>
         );
-      }
+      },
+      searchable: false,
+      sortable: false
     },
   ];
 
@@ -674,11 +712,7 @@ We apologize for any inconvenience.`;
         
         <div className="dashboard-content-wrapper">
           <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
-            View and manage all customer appointments, assign staff, and update statuses.
-            <br />
-            <small style={{ color: '#666', fontSize: '14px' }}>
-              Use the notification buttons to manually send requests to customers when needed.
-            </small>
+            {/* View and manage all customer appointments, assign staff, and update statuses. */}<br/>
           </p>
 
           {successMessage && (
@@ -731,6 +765,9 @@ We apologize for any inconvenience.`;
                 data={bookings} 
                 columns={columns} 
                 emptyMessage="No bookings found. Bookings will appear here when customers make appointments."
+                searchPlaceholder="Search bookings by service, customer, staff, date, or status..."
+                showSearch={true}
+                showPagination={true}
               />
             ) : (
               <div className="dashboard-empty-state">

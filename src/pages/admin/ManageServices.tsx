@@ -214,7 +214,7 @@ const ManageServices: React.FC = () => {
         duration: formData.duration,
         category: formData.category,
         service_img: formData.service_img || null, // Use null instead of empty string
-        updated_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
         ...(!editingService && { created_at: new Date().toISOString() })
       };
 
@@ -351,8 +351,8 @@ const ManageServices: React.FC = () => {
         <DashboardHeader title="Manage Services" />
         
         <div className="dashboard-content-wrapper">
-          <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
-            Create, update, and remove services offered by the salon and spa.
+          <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)', marginTop: '80px'}}>
+            {/* Create, update, and remove services offered by the salon and spa. */}
           </p>
 
           {successMessage && (

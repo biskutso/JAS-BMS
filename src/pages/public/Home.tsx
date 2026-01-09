@@ -58,7 +58,7 @@ const Home: React.FC = () => {
       />
       
       <section className="page-container services-section">
-        <div className="section-header">
+        <div className="section-headers">
           <h2 className="section-title animate-fade-in-up" style={{animationDelay: '0.5s'}}>Our Signature Services</h2>
           <p className="section-subtitle animate-fade-in-up" style={{animationDelay: '0.5s'}}>
             Discover a world of relaxation and rejuvenation with our expertly crafted treatments.
@@ -130,7 +130,7 @@ const Home: React.FC = () => {
 
       <section className="about-section">
         <div className="page-container">
-          <div className="section-header">
+          <div className="section-headers">
             <h2 className="section-title">About Joyce Aesthetic Salon & Spa</h2>
             <p className="section-subtitle">
               At Joyce Aesthetic, we believe in holistic well-being. Our dedicated team of professionals
@@ -167,7 +167,7 @@ const Home: React.FC = () => {
           margin-top: 40px;
         }
         
-        .section-header {
+        .section-headers {
           text-align: center;
           max-width: 800px;
           margin: 0 auto 40px;

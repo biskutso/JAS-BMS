@@ -311,6 +311,7 @@ const ManageStaff: React.FC = () => {
     await deleteStaffMember(staffId);
   };
 
+  // UPDATED COLUMNS WITH SEARCHABLE AND SORTABLE PROPERTIES
   const columns = [
     { 
       header: 'Name', 
@@ -322,7 +323,15 @@ const ManageStaff: React.FC = () => {
             ID: {item.id.substring(0, 8)}...
           </div>
         </div>
-      )
+      ),
+      searchable: true,
+      sortable: true,
+      sortFn: (a: StaffMember, b: StaffMember) => {
+        // Sort by last name, then first name
+        const aFullName = `${a.lastName} ${a.firstName}`.toLowerCase();
+        const bFullName = `${b.lastName} ${b.firstName}`.toLowerCase();
+        return aFullName.localeCompare(bFullName);
+      }
     },
     { 
       header: 'Email', 
@@ -331,7 +340,11 @@ const ManageStaff: React.FC = () => {
         <span className="staff-email">
           {item.email}
         </span>
-      )
+      ),
+      searchable: true,
+      sortable: true,
+      sortFn: (a: StaffMember, b: StaffMember) => 
+        a.email.toLowerCase().localeCompare(b.email.toLowerCase())
     },
     { 
       header: 'Role', 
@@ -340,16 +353,39 @@ const ManageStaff: React.FC = () => {
         <span className={`role-badge role-${item.role}`}>
           {capitalizeFirstLetter(item.role)}
         </span>
-      )
+      ),
+      searchable: true,
+      sortable: true,
+      // Custom sort function for role (admin first, then staff)
+      sortFn: (a: StaffMember, b: StaffMember) => {
+        const roleOrder: Record<string, number> = { 
+          'admin': 0, 
+          'staff': 1
+        };
+        
+        const aOrder = roleOrder[a.role] ?? 999;
+        const bOrder = roleOrder[b.role] ?? 999;
+        return aOrder - bOrder;
+      }
     },
     { 
       header: 'Created', 
-      key: 'created', 
+      key: 'created_at', 
       render: (item: StaffMember) => (
         <span className="staff-created-date">
-          {new Date(item.created_at).toLocaleDateString()}
+          {new Date(item.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          })}
         </span>
-      )
+      ),
+      searchable: true,
+      sortable: true,
+      sortFn: (a: StaffMember, b: StaffMember) => {
+        // Sort by date (newest first by default)
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
     },
     {
       header: 'Actions',
@@ -372,7 +408,9 @@ const ManageStaff: React.FC = () => {
             Delete
           </Button>
         </div>
-      )
+      ),
+      searchable: false,
+      sortable: false
     },
   ];
 
@@ -386,8 +424,8 @@ const ManageStaff: React.FC = () => {
         <DashboardHeader title="Manage Staff" />
         
         <div className="dashboard-content-wrapper">
-          <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
-            Manage all staff and admin users in the system.
+          <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)', marginTop: '80px'}}>
+            {/* Manage all staff and admin users in the system. */}
           </p>
 
           {successMessage && (
@@ -448,6 +486,9 @@ const ManageStaff: React.FC = () => {
                 data={staffMembers} 
                 columns={columns} 
                 emptyMessage="No staff or admin users found. Add your first user to get started."
+                searchPlaceholder="Search users by name, email, or role..."
+                showSearch={true}
+                showPagination={true}
               />
             ) : (
               <div className="dashboard-empty-state">

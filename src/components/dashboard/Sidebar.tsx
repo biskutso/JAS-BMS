@@ -20,9 +20,10 @@ interface NavItem {
 
 const sidebarNavItems: NavItem[] = [
   // Customer Links
-  { name: 'Dashboard', path: '/customer/dashboard', icon: MdDashboard, roles: ['customer'] },
+  // { name: 'Dashboard', path: '/customer/dashboard', icon: MdDashboard, roles: ['customer'] },
+  { name: 'Home', path: '/', icon: MdDashboard, roles: ['customer'] },
   { name: 'Browse Services', path: '/customer/services', icon: MdListAlt, roles: ['customer'] },
-  { name: 'Book Appointment', path: '/customer/book', icon: MdCalendarToday, roles: ['customer'] },
+  // { name: 'Book Appointment', path: '/customer/book', icon: MdCalendarToday, roles: ['customer'] },
   { name: 'Booking History', path: '/customer/manage-bookings', icon: MdHistory, roles: ['customer'] },
   { 
     name: 'Notifications', 

@@ -12,6 +12,9 @@ import LoginSignup from '@pages/public/LoginSignup';
 // Dashboard Layout
 import DashboardLayout from '@pages/dashboard/DashboardLayout';
 
+// Profile
+import ProfilePage from '@pages/profile/ProfilePage';
+
 // Customer Pages
 import CustomerDashboard from '@pages/customer/Dashboard';
 import ViewServicesCustomer from '@pages/customer/ViewServices';
@@ -104,11 +107,12 @@ const AppRouter: React.FC = () => {
         <Route element={<ProtectedRoute allowedRoles={['customer', 'admin']} />}>
           <Route path="/customer" element={<DashboardLayout />}>
             <Route index element={<CustomerDashboard />} />
-            <Route path="dashboard" element={<CustomerDashboard />} />
+            {/* <Route path="dashboard" element={<CustomerDashboard />} /> */}
             <Route path="services" element={<ViewServicesCustomer />} />
             <Route path="book" element={<BookAppointment />} />
             <Route path="manage-bookings" element={<CancelReschedule />} />
             <Route path="notifications" element={<Notifications />} />
+            <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Route>
 
@@ -119,6 +123,7 @@ const AppRouter: React.FC = () => {
             <Route path="dashboard" element={<StaffDashboard />} />
             <Route path="schedule" element={<CheckSchedule />} />
             <Route path="update-status" element={<UpdateStatus />} />
+            <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Route>
 
@@ -132,6 +137,7 @@ const AppRouter: React.FC = () => {
             <Route path="staff" element={<ManageStaff />} />
             <Route path="bookings" element={<ManageBookings />} />
             <Route path="reports" element={<GenerateReports />} />
+            <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Route>
 

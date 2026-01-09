@@ -267,12 +267,12 @@ const StaffDashboard: React.FC = () => {
         <div className="dashboard-content-wrapper">
           <DashboardHeader title={`Welcome, ${user?.first_name || 'Staff'}!`} />
           
-          <div className="booking-header">
+          {/* <div className="booking-header">
             <h1 className="page-title">Staff Dashboard</h1>
             <p className="page-subtitle">
               Manage your appointments, view your schedule, and update booking statuses.
             </p>
-          </div>
+          </div> */}
 
           {error && (
             <div className="dashboard-error">

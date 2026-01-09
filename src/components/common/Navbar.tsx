@@ -23,13 +23,24 @@ const Navbar: React.FC = () => {
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
+  // Determine dashboard route based on user role
+  const getDashboardRoute = () => {
+    if (!isAuthenticated) {
+      return '/login';
+    }
+    
+    // If user is customer, route to /customer/services
+    if (user?.role === 'customer') {
+      return '/customer/services';
+    }
+    
+    // For other roles, use the standard dashboard route
+    return `/${user?.role}/dashboard`;
+  };
+
   // Handle navigation to dashboard or login
   const handleDashboardClick = () => {
-    if (!isAuthenticated) {
-      navigate('/login');
-    } else {
-      navigate(`/${user?.role}/dashboard`);
-    }
+    navigate(getDashboardRoute());
     closeMobileMenu();
   };
 
@@ -56,7 +67,7 @@ const Navbar: React.FC = () => {
         {/* Single Dashboard link */}
         <li className="nav-link">
           <NavLink
-            to={isAuthenticated ? `/${user?.role}/dashboard` : '/login'}
+            to={getDashboardRoute()}
             className={({ isActive }) => (isActive ? 'active' : '')}
           >
             Dashboard
@@ -72,7 +83,7 @@ const Navbar: React.FC = () => {
           </>
         ) : (
           <>
-            <span className="welcome-message">Hello, {user?.first_name}</span>
+            <span className="">Hello, {user?.first_name}</span>
             <Button variant="secondary" size="small" onClick={handleLogout}>Logout</Button>
           </>
         )}
@@ -102,7 +113,7 @@ const Navbar: React.FC = () => {
           {/* Single Dashboard link for mobile */}
           <li className="nav-link">
             <NavLink
-              to={isAuthenticated ? `/${user?.role}/dashboard` : '/login'}
+              to={getDashboardRoute()}
               onClick={closeMobileMenu}
               className={({ isActive }) => (isActive ? 'active' : '')}
             >
@@ -118,8 +129,8 @@ const Navbar: React.FC = () => {
             </>
           ) : (
             <>
-              <span className="welcome-message" style={{ color: 'var(--color-primary-light)' }}>Hello, {user?.first_name}</span>
-              <Button variant="secondary" size="small" onClick={handleLogout}>Logout</Button>
+              <span className="" style={{ color: 'var(--color-primary-light)' }}>Hello, {user?.first_name}</span>
+              <Button variant="primary" size="small" onClick={handleLogout}>Logout</Button>
             </>
           )}
         </div>

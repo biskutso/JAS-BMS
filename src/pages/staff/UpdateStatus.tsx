@@ -363,12 +363,12 @@ const UpdateStatus: React.FC = () => {
         <div className="dashboard-content-wrapper">
           <DashboardHeader title="Manage Appointments" />
           
-          <div className="booking-header">
+          {/* <div className="booking-header">
             <h1 className="page-title">Manage Appointments</h1>
             <p className="page-subtitle">
               Confirm, complete, or cancel customer appointments assigned to you.
             </p>
-          </div>
+          </div> */}
 
           {error && (
             <div className="dashboard-error">

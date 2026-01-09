@@ -330,12 +330,12 @@ const CheckSchedule: React.FC = () => {
         <div className="dashboard-content-wrapper">
           <DashboardHeader title="My Schedule" />
           
-          <div className="booking-header">
+          {/* <div className="booking-header">
             <h1 className="page-title">My Schedule</h1>
             <p className="page-subtitle">
               View your appointments for the day and manage your schedule.
             </p>
-          </div>
+          </div> */}
 
           {/* Date Selection */}
           <div className="date-selection">
@@ -381,7 +381,7 @@ const CheckSchedule: React.FC = () => {
           )}
 
           {/* Quick Stats */}
-          <div className="stats-grid">
+          {/* <div className="stats-grid">
             <div className="stat-card pending-card">
               <p className="stat-number">{pendingBookings}</p>
               <p className="stat-label">Pending</p>
@@ -398,7 +398,7 @@ const CheckSchedule: React.FC = () => {
               <p className="stat-number">{bookings.length}</p>
               <p className="stat-label">Total</p>
             </div>
-          </div>
+          </div> */}
 
           {/* Bookings Table */}
           <div className="upcoming-bookings-section">

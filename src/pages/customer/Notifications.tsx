@@ -374,14 +374,33 @@ const Notifications: React.FC = () => {
     <div className="dashboard-layout-container">
       <div className="dashboard-main-content">
         <div className="dashboard-content-wrapper">
-          <DashboardHeader title="Your Notifications" />
+          <DashboardHeader title="Notifications" />
           
           <div className="booking-header">
-            <h1 className="page-title">Notifications</h1>
+            {/* <h1 className="page-title">Notifications</h1>
             <p className="page-subtitle">
               Stay updated with your appointments, special offers, and important announcements.
-            </p>
+            </p> */}
           </div>
+
+          {/* Quick Stats */}
+          {notifications.length > 0 && (
+            <div className="quick-actions-grid" style={{ marginTop: 'var(--spacing-lg)' }}>
+              <div className="quick-action-card stat-card upcoming-card">
+                <p className="stat-number">{notifications.length}</p>
+                <p className="stat-label">Total Notifications</p>
+              </div>
+              <div className="quick-action-card stat-card pending-card">
+                <p className="stat-number">{unreadCount}</p>
+                <p className="stat-label">Unread Notifications</p>
+              </div>
+              <div className="quick-action-card stat-card confirmed-card">
+                <p className="stat-number">{readCount}</p>
+                <p className="stat-label">Read Notifications</p>
+              </div>
+            </div>
+          )}
+
           
           {/* Header Actions */}
           <div className="section-header">
@@ -555,48 +574,7 @@ const Notifications: React.FC = () => {
             )}
           </div>
 
-          {/* Quick Stats */}
-          {notifications.length > 0 && (
-            <div className="quick-actions-grid" style={{ marginTop: 'var(--spacing-lg)' }}>
-              <div className="quick-action-card stat-card upcoming-card">
-                <p className="stat-number">{notifications.length}</p>
-                <p className="stat-label">Total Notifications</p>
-              </div>
-              <div className="quick-action-card stat-card pending-card">
-                <p className="stat-number">{unreadCount}</p>
-                <p className="stat-label">Unread Notifications</p>
-              </div>
-              <div className="quick-action-card stat-card confirmed-card">
-                <p className="stat-number">{readCount}</p>
-                <p className="stat-label">Read Notifications</p>
-              </div>
-            </div>
-          )}
-
-          {/* Information Banner */}
-          {notifications.length > 0 && (
-            <div className="booking-info-banner">
-              <h3 className="banner-title">Notification Tips</h3>
-              <p className="banner-text">
-                Notifications are automatically sent when your booking status changes.
-                You'll receive updates for confirmations, cancellations, and reminders.
-              </p>
-              <div className="banner-features">
-                <div className="feature-item">
-                  <span className="feature-icon">📅</span>
-                  <span className="feature-text">Booking updates</span>
-                </div>
-                <div className="feature-item">
-                  <span className="feature-icon">⏰</span>
-                  <span className="feature-text">Appointment reminders</span>
-                </div>
-                <div className="feature-item">
-                  <span className="feature-icon">📢</span>
-                  <span className="feature-text">Special offers</span>
-                </div>
-              </div>
-            </div>
-          )}
+          
         </div>
       </div>
     </div>

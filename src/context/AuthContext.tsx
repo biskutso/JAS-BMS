@@ -8,6 +8,9 @@ interface AuthUser {
   first_name?: string;
   last_name?: string;
   role: UserRole;
+  created_at?: string;
+  phone_num?: number;
+  profile_pic?: string;
 }
 
 interface AuthContextType {
@@ -51,6 +54,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         first_name: data.first_name || '',
         last_name: data.last_name || '',
         role: (data.role as UserRole) || 'customer',
+        created_at: data.created_at,
+        phone_num: data.phone_num,
+        profile_pic: data.profile_pic,
       };
     } catch (err) {
       console.error('Unexpected error fetching user profile:', err);

@@ -43,6 +43,7 @@ const AdminDashboard: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [revenueLoading, setRevenueLoading] = useState(false);
 
   // Helper function to filter out null values from arrays
   const filterNullIds = (ids: (string | null)[]): string[] => {
@@ -131,7 +132,7 @@ const AdminDashboard: React.FC = () => {
             booking_date: booking.booking_date,
             booking_time: booking.booking_time,
             status: booking.status as BookingStatus,
-            price: booking.total_price || service?.price || 0,
+            price: booking.total_price || service?.price || 0, // This is correct - uses booking price first
             notes: booking.notes || ''
           };
         });
@@ -159,12 +160,73 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  // FIXED: Use the same logic as the recent bookings table
+  const fetchTotalRevenue = async (): Promise<number> => {
+    try {
+      setRevenueLoading(true);
+      console.log('🔄 Fetching total revenue...');
+      
+      // Fetch ALL completed bookings (not filtered by date)
+      const { data: bookingsData, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('total_price, service_id')
+        .eq('status', 'completed');
+
+      if (bookingsError) {
+        console.error('Bookings fetch error:', bookingsError);
+        throw new Error(`Failed to fetch bookings: ${bookingsError.message}`);
+      }
+
+      console.log(`📊 Found ${bookingsData?.length || 0} completed bookings`);
+
+      if (!bookingsData || bookingsData.length === 0) {
+        return 0;
+      }
+
+      // Get service IDs from bookings (for fallback prices)
+      const serviceIds = [...new Set(bookingsData.map(booking => booking.service_id).filter(Boolean))];
+      
+      // Fetch services data for fallback prices only
+      let servicesData: any[] = [];
+      if (serviceIds.length > 0) {
+        const { data: services, error: servicesError } = await supabase
+          .from('services')
+          .select('id, price')
+          .in('id', serviceIds);
+
+        if (!servicesError) {
+          servicesData = services || [];
+        }
+      }
+
+      // Create a map for quick service lookup (for fallback only)
+      const servicesMap = new Map(servicesData.map(service => [service.id, service]));
+
+      // Calculate total revenue using THE SAME LOGIC as the recent bookings table:
+      // Use booking.total_price FIRST, then fallback to service price if needed
+      const totalRevenue = bookingsData.reduce((sum, booking) => {
+        // IMPORTANT: Use booking.total_price FIRST (this is the price stored at booking time)
+        // Only use service price as fallback if booking.total_price is null/undefined
+        const service = servicesMap.get(booking.service_id);
+        const price = booking.total_price || service?.price || 0;
+        return sum + (Number(price) || 0);
+      }, 0);
+
+      console.log(`💰 Calculated total revenue: ${formatCurrency(totalRevenue)}`);
+      return totalRevenue;
+
+    } catch (err: any) {
+      console.error('❌ Error in fetchTotalRevenue:', err);
+      return 0;
+    } finally {
+      setRevenueLoading(false);
+    }
+  };
+
   // Fetch dashboard statistics with better error handling
   const fetchDashboardStats = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const currentMonth = new Date().getMonth() + 1;
-      const currentYear = new Date().getFullYear();
 
       console.log('🔄 Fetching dashboard statistics...');
 
@@ -178,21 +240,10 @@ const AdminDashboard: React.FC = () => {
         completedBookings: 0
       };
 
-      // Get total revenue (completed bookings this month) - simplified
-      try {
-        const { data: revenueData, error: revenueError } = await supabase
-          .from('bookings')
-          .select('total_price, status')
-          .eq('status', 'completed');
+      // Get total revenue using the accurate function
+      newStats.totalRevenue = await fetchTotalRevenue();
 
-        if (!revenueError && revenueData) {
-          newStats.totalRevenue = revenueData.reduce((sum, booking) => sum + (booking.total_price || 0), 0);
-        }
-      } catch (revenueErr) {
-        console.error('❌ Error fetching revenue:', revenueErr);
-      }
-
-      // Get today's bookings - simplified
+      // Get today's bookings
       try {
         const { data: todayData, error: todayError } = await supabase
           .from('bookings')
@@ -206,7 +257,7 @@ const AdminDashboard: React.FC = () => {
         console.error('❌ Error fetching today bookings:', todayErr);
       }
 
-      // Get staff count - simplified (remove is_active filter)
+      // Get staff count
       try {
         const { data: staffData, error: staffError } = await supabase
           .from('users')
@@ -254,7 +305,6 @@ const AdminDashboard: React.FC = () => {
 
     } catch (err: any) {
       console.error('❌ Error in fetchDashboardStats:', err);
-      // Don't set error here - we want to show the dashboard even if stats fail
     }
   };
 
@@ -379,10 +429,10 @@ const AdminDashboard: React.FC = () => {
             <div className="stat-card stat-card-revenue">
               <h4 className="stat-title stat-title-revenue">Total Revenue</h4>
               <p className="stat-value stat-value-revenue">
-                {formatCurrency(stats.totalRevenue)}
+                {revenueLoading ? 'Calculating...' : formatCurrency(stats.totalRevenue)}
               </p>
               <p className="stat-description">
-                All Completed Bookings
+                All Completed Bookings • {stats.completedBookings} bookings
               </p>
             </div>
             

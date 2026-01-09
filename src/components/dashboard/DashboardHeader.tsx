@@ -1,10 +1,10 @@
 // src/components/dashboard/DashboardHeader.tsx
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Button from '@components/common/Button';
 import Modal from '@components/common/Modal';
 import { useModal } from '@hooks/useModal';
 import { useAuth } from '@context/AuthContext';
-import { DUMMY_IMAGES } from '@utils/constants';
+import { supabase } from '../../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { MdLogout, MdPerson, MdNotifications } from 'react-icons/md';
 
@@ -24,6 +24,72 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { isOpen, openModal, closeModal } = useModal();
+  const [profileImage, setProfileImage] = useState<string>('');
+  const [loadingImage, setLoadingImage] = useState(true);
+  const [imageError, setImageError] = useState(false);
+  const [modalImageError, setModalImageError] = useState(false);
+
+  // Fetch profile image when user changes
+  useEffect(() => {
+    const fetchProfileImage = async () => {
+      if (!user?.id) {
+        setLoadingImage(false);
+        return;
+      }
+
+      try {
+        setLoadingImage(true);
+        setImageError(false);
+        setModalImageError(false);
+        
+        // Fetch user profile including profile_pic
+        const { data, error } = await supabase
+          .from('users')
+          .select('profile_pic')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error('Error fetching profile:', error);
+          return;
+        }
+
+        // Load profile image from Profile_img bucket, profile_pic folder
+        if (data?.profile_pic) {
+          try {
+            const { data: imageData, error: imageError } = await supabase
+              .storage
+              .from('Profile_img')
+              .createSignedUrl(`profile_pic/${data.profile_pic}`, 60 * 60);
+            
+            if (imageError) {
+              console.error('Error creating signed URL:', imageError);
+              setImageError(true);
+              setModalImageError(true);
+            } else if (imageData) {
+              setProfileImage(imageData.signedUrl);
+            }
+          } catch (imageError) {
+            console.error('Error loading profile image:', imageError);
+            setImageError(true);
+            setModalImageError(true);
+          }
+        } else {
+          // No profile picture exists
+          setImageError(true);
+          setModalImageError(true);
+        }
+      } catch (error) {
+        console.error('Error fetching profile image:', error);
+        setImageError(true);
+        setModalImageError(true);
+      } finally {
+        setLoadingImage(false);
+      }
+    };
+
+    fetchProfileImage();
+  }, [user]);
 
   const handleLogoutClick = () => {
     openModal();
@@ -51,6 +117,14 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     }
   };
 
+  // Get user initials for fallback avatar
+  const getUserInitials = () => {
+    if (!user?.first_name) return 'U';
+    const firstInitial = user.first_name.charAt(0);
+    const lastInitial = user.last_name?.charAt(0) || '';
+    return `${firstInitial}${lastInitial}`.toUpperCase();
+  };
+
   return (
     <>
       <header id="dashboard-header">
@@ -59,8 +133,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             <h2 id="dashboard-header-title">{title}</h2>
             {user && (
               <div id="dashboard-user-greeting">
-                <span id="dashboard-greeting-text">Welcome back,</span>
-                <span id="dashboard-user-name">{user.first_name}</span>
+                {/* <span id="dashboard-greeting-text">Welcome back,</span>
+                <span id="dashboard-user-name">{user.first_name}</span> */}
               </div>
             )}
           </div>
@@ -71,15 +145,45 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               
               {user && (
                 <div id="dashboard-user-profile-section">
-                  <button 
-                    id="dashboard-profile-btn"
+                  {/* Combined Profile Section */}
+                  <div 
+                    id="dashboard-profile-avatar-container"
                     onClick={handleProfileClick}
-                    title="Profile"
+                    style={{ cursor: 'pointer' }}
+                    title={`${user.first_name} ${user.last_name || ''} - ${user.role}`}
                     aria-label="Go to profile"
                   >
-                    <MdPerson />
-                  </button>
+                    <div id="dashboard-avatar-wrapper">
+                      {loadingImage ? (
+                        <div className="avatar-loading"></div>
+                      ) : profileImage && !imageError ? (
+                        <img
+                          src={profileImage}
+                          alt={`${user.first_name} ${user.last_name || ''}`}
+                          id="dashboard-profile-avatar"
+                          onError={() => setImageError(true)}
+                          onLoad={() => setImageError(false)}
+                        />
+                      ) : null}
+                      
+                      {/* Fallback avatar with initials - only show when no image or image failed to load */}
+                      <div 
+                        id="dashboard-avatar-fallback" 
+                        style={{
+                          display: loadingImage || (profileImage && !imageError) ? 'none' : 'flex'
+                        }}
+                      >
+                        {getUserInitials()}
+                      </div>
+                    </div>
+                    
+                    <div id="dashboard-user-info">
+                      <span id="dashboard-user-name-short">{user.first_name} {user.last_name?.charAt(0) || ''}.</span>
+                      <span id="dashboard-user-role">{user.role}</span>
+                    </div>
+                  </div>
                   
+                  {/* Notifications button for customers */}
                   {user.role === 'customer' && (
                     <button 
                       id="dashboard-notification-btn"
@@ -95,23 +199,10 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                       )}
                     </button>
                   )}
-                  
-                  <div id="dashboard-user-avatar-container">
-                    <img
-                      src={DUMMY_IMAGES.CLIENT_AVATAR}
-                      alt={`${user.first_name} ${user.last_name || ''}`}
-                      id="dashboard-user-avatar"
-                      title={`${user.first_name} ${user.last_name || ''} (${user.role})`}
-                    />
-                    <div id="dashboard-user-info">
-                      <span id="dashboard-user-name-short">{user.first_name} {user.last_name?.charAt(0) || ''}.</span>
-                      <span id="dashboard-user-role">{user.role}</span>
-                    </div>
-                  </div>
                 </div>
               )}
               
-              {/* Logout button with separate icon and text spans */}
+              {/* Logout button */}
               <button 
                 onClick={handleLogoutClick}
                 id="dashboard-logout-btn"
@@ -138,14 +229,29 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           
           {user && (
             <div id="dashboard-current-user-info">
-              <img
-                src={DUMMY_IMAGES.CLIENT_AVATAR}
-                alt={user.first_name}
-                id="dashboard-modal-avatar"
-              />
+              <div id="dashboard-modal-avatar-container">
+                {profileImage && !modalImageError ? (
+                  <img
+                    src={profileImage}
+                    alt={user.first_name}
+                    id="dashboard-modal-avatar"
+                    onError={() => setModalImageError(true)}
+                    onLoad={() => setModalImageError(false)}
+                  />
+                ) : null}
+                <div 
+                  id="dashboard-modal-avatar-fallback" 
+                  style={{
+                    display: profileImage && !modalImageError ? 'none' : 'flex'
+                  }}
+                >
+                  {getUserInitials()}
+                </div>
+              </div>
               <div id="dashboard-modal-user-details">
                 <strong>{user.first_name} {user.last_name || ''}</strong>
                 <span id="dashboard-user-email">{user.email}</span>
+                <span id="dashboard-user-role-modal">{user.role}</span>
               </div>
             </div>
           )}
@@ -160,6 +266,48 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </div>
         </div>
       </Modal>
+
+      <style>{`
+        /* Avatar Loading Animation */
+        .avatar-loading {
+          width: 36px;
+          height: 36px;
+          border: 2px solid #f3f3f3;
+          border-top: 2px solid #b8860b;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
+        /* Fallback avatar styles */
+        #dashboard-avatar-fallback,
+        #dashboard-modal-avatar-fallback {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: 'Inter', sans-serif;
+          font-weight: 600;
+          font-size: 0.9rem;
+          border: 2px solid #b8860b;
+          flex-shrink: 0;
+        }
+
+        /* Modal avatar fallback */
+        #dashboard-modal-avatar-fallback {
+          width: 50px;
+          height: 50px;
+          font-size: 1.2rem;
+        }
+      `}</style>
     </>
   );
 };

@@ -342,9 +342,9 @@ const BookAppointment: React.FC = () => {
         <div className="dashboard-content-wrapper">
           <div className="booking-header">
             <h1 className="page-title">Schedule Your Appointment</h1>
-            <p className="page-subtitle">
+            {/* <p className="page-subtitle">
               Choose your desired service, preferred staff member, date, and time to schedule your next visit.
-            </p>
+            </p> */}
           </div>
 
           {/* Show preselected service notification */}
