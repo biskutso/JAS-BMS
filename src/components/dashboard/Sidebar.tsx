@@ -6,7 +6,7 @@ import { IconType } from 'react-icons';
 import {
   MdDashboard, MdPerson, MdCalendarToday, MdListAlt, MdStore,
   MdPeople, MdSettings, MdHistory, MdNotifications, MdReport, 
-  MdEventAvailable, MdMenu, MdClose
+  MdEventAvailable, MdMenu, MdClose, MdAdminPanelSettings
 } from 'react-icons/md';
 import { supabase } from '../../supabaseClient';
 
@@ -44,6 +44,7 @@ const sidebarNavItems: NavItem[] = [
   { name: 'Manage Services', path: '/admin/services', icon: MdListAlt, roles: ['admin'] },
   { name: 'Manage Staff', path: '/admin/staff', icon: MdPeople, roles: ['admin'] },
   { name: 'Manage Bookings', path: '/admin/bookings', icon: MdCalendarToday, roles: ['admin'] },
+  { name: 'Activity Logs', path: '/admin/logs', icon: MdAdminPanelSettings, roles: ['admin'] },
   { name: 'Generate Reports', path: '/admin/reports', icon: MdReport, roles: ['admin'] },
 ];
 

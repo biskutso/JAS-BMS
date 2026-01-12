@@ -33,6 +33,7 @@ import ManageInventory from '@pages/admin/ManageInventory';
 import ManageServices from '@pages/admin/ManageServices';
 import ManageStaff from '@pages/admin/ManageStaff';
 import ManageBookings from '@pages/admin/ManageBookings';
+import ActivityLogs from '@pages/admin/ActivityLogs';
 import GenerateReports from '@pages/admin/GenerateReports';
 
 // 404 Fallback
@@ -136,6 +137,7 @@ const AppRouter: React.FC = () => {
             <Route path="services" element={<ManageServices />} />
             <Route path="staff" element={<ManageStaff />} />
             <Route path="bookings" element={<ManageBookings />} />
+            <Route path="logs" element={<ActivityLogs />} />
             <Route path="reports" element={<GenerateReports />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>

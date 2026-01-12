@@ -186,7 +186,7 @@ const ManageStaff: React.FC = () => {
       if (updates.lastName) updateData.last_name = updates.lastName;
       if (updates.role) updateData.role = updates.role;
       
-      updateData.updated_at = new Date().toISOString();
+      updateData.created_at = new Date().toISOString();
 
       const { error } = await supabase
         .from('users')

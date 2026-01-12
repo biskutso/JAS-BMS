@@ -338,6 +338,7 @@
 /* Recent Bookings Section */
 .recent-bookings-section {
   margin-bottom: 2.5rem;
+  margin-top: 80px;
   background: white;
   padding: 2rem;
   border-radius: 16px;
@@ -2590,4 +2591,101 @@
   .metrics-grid {
     grid-template-columns: 1fr;
   }
+}
+
+
+.bookings-header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .bookings-header-actions button {
+    width: 100%;
+  }
+}
+
+/* simple responsive grid for modal forms */
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 768px) {
+  .form-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ============================= */
+/* Activity Logs (Readable) */
+/* ============================= */
+
+.activity-user {
+  line-height: 1.3;
+}
+
+.activity-username {
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.activity-userrole {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.activity-summary {
+  font-size: 0.88rem;
+  color: #334155;
+  line-height: 1.4;
+  word-break: break-word;
+  max-width: 560px;
+}
+
+.activity-datetime {
+  font-size: 0.85rem;
+  color: #334155;
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* Action badges */
+.activity-action-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  display: inline-block;
+}
+
+.action-insert {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.action-update {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+.action-delete {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.action-login {
+  background-color: #ede7f6;
+  color: #5e35b1;
+}
+
+.action-logout {
+  background-color: #f3e5f5;
+  color: #6a1b9a;
 }

@@ -1,24 +1,41 @@
-// src/pages/admin/Dashboard.tsx
+// src/pages/admin/Dashboard.tsx - UPDATED (supports walk-ins in Recent Bookings + keeps safe null filtering)
 import React, { useState, useEffect } from 'react';
 import DashboardHeader from '@components/dashboard/DashboardHeader';
 import { useAuth } from '@context/AuthContext';
 import { Link } from 'react-router-dom';
 import Table from '@components/dashboard/Table';
 import Button from '@components/common/Button';
-import { Booking, BookingStatus } from '@models/booking';
+import { BookingStatus } from '@models/booking';
 import { formatCurrency } from '@utils/helpers';
 import { supabase } from '../../supabaseClient';
 import "../../assets/styles/dashboards.css";
 
-interface BookingWithRelations extends Booking {
+interface BookingWithRelations {
+  id: string;
+
+  service_id: number;
   service_name: string;
   service_price: number;
   service_duration: number;
+
+  customer_id: string | null;
   customer_name: string;
   customer_email: string;
+
+  walk_in_customer_id: string | null;
+  walk_in_customer_name: string;
+  walk_in_customer_phone: string;
+  isWalkIn: boolean;
+
+  staff_id: string | null;
   staff_name: string;
+
   booking_date: string;
   booking_time: string;
+
+  status: BookingStatus;
+  price: number;
+  notes?: string;
 }
 
 interface DashboardStats {
@@ -45,177 +62,138 @@ const AdminDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [revenueLoading, setRevenueLoading] = useState(false);
 
-  // Helper function to filter out null values from arrays
-  const filterNullIds = (ids: (string | null)[]): string[] => {
-    return ids.filter((id): id is string => id !== null && id !== undefined);
+  /**
+   * IMPORTANT:
+   * Use the SAME join name you used in ManageBookings.tsx:
+   * walkin:walk_in_customers!bookings_walkin_fk (name, phone_num)
+   */
+  const WALKIN_FK_JOIN = 'bookings_walkin_fk';
+
+  const filterNullIds = (ids: (string | number | null | undefined)[]) => {
+    return ids.filter((id): id is string | number => id !== null && id !== undefined);
   };
 
-  // Fetch dashboard data
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      console.log('🔄 Fetching admin dashboard data...');
-
-      // First, try to fetch basic bookings without complex joins
-      const { data: bookingsData, error: bookingsError } = await supabase
+      // Pull recent bookings with joins (services, customers, staff, walk-ins)
+      const { data, error } = await supabase
         .from('bookings')
-        .select('*')
+        .select(`
+          id,
+          service_id,
+          customer_id,
+          walk_in_customer_id,
+          staff_id,
+          booking_date,
+          booking_time,
+          status,
+          total_price,
+          notes,
+          created_at,
+
+          services:service_id (service_name, price, duration),
+          customers:customer_id (first_name, last_name, email),
+          staff:staff_id (first_name, last_name),
+          walkin:walk_in_customers!${WALKIN_FK_JOIN} (name, phone_num)
+        `)
         .order('created_at', { ascending: false })
         .limit(10);
 
-      if (bookingsError) {
-        console.error('❌ Error fetching basic bookings:', bookingsError);
-        throw bookingsError;
-      }
+      if (error) throw error;
 
-      console.log('✅ Basic bookings fetched:', bookingsData);
+      const transformed: BookingWithRelations[] = (data || []).map((b: any) => {
+        const isWalkIn = !!b.walk_in_customer_id;
 
-      // If we have bookings, try to fetch related data
-      if (bookingsData && bookingsData.length > 0) {
-        // Fetch service details
-        const serviceIds = filterNullIds([...new Set(bookingsData.map(booking => booking.service_id))]);
-        let servicesData: any[] = [];
-        if (serviceIds.length > 0) {
-          const { data: services } = await supabase
-            .from('services')
-            .select('*')
-            .in('id', serviceIds);
-          servicesData = services || [];
-        }
+        const regName = `${b.customers?.first_name || ''} ${b.customers?.last_name || ''}`.trim();
+        const walkName = b.walkin?.name || '';
+        const displayCustomerName = (isWalkIn ? walkName : regName) || 'Unknown Customer';
 
-        // Fetch customer details
-        const customerIds = filterNullIds([...new Set(bookingsData.map(booking => booking.customer_id))]);
-        let customersData: any[] = [];
-        if (customerIds.length > 0) {
-          const { data: customers } = await supabase
-            .from('users')
-            .select('id, first_name, last_name, email')
-            .in('id', customerIds);
-          customersData = customers || [];
-        }
+        const staffName = b.staff
+          ? `${b.staff.first_name || ''} ${b.staff.last_name || ''}`.trim()
+          : 'Unassigned';
 
-        // Fetch staff details - only if there are non-null staff IDs
-        const staffIds = filterNullIds([...new Set(bookingsData.map(booking => booking.staff_id))]);
-        let staffData: any[] = [];
-        if (staffIds.length > 0) {
-          const { data: staff } = await supabase
-            .from('users')
-            .select('id, first_name, last_name')
-            .in('id', staffIds);
-          staffData = staff || [];
-        }
+        return {
+          id: b.id,
 
-        // Transform bookings data
-        const transformedBookings: BookingWithRelations[] = bookingsData.map(booking => {
-          const service = servicesData?.find(s => s.id === booking.service_id);
-          const customer = customersData?.find(c => c.id === booking.customer_id);
-          const staff = staffData?.find(s => s.id === booking.staff_id);
-          
-          return {
-            id: booking.id,
-            serviceId: booking.service_id,
-            serviceName: service?.service_name || 'Unknown Service',
-            service_name: service?.service_name || 'Unknown Service',
-            service_price: service?.price || 0,
-            service_duration: service?.duration || 60,
-            customerId: booking.customer_id,
-            customerName: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
-            customer_name: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
-            customer_email: customer?.email || '',
-            staffId: booking.staff_id,
-            staffName: staff ? `${staff.first_name || ''} ${staff.last_name || ''}`.trim() : 'Unassigned',
-            staff_name: staff ? `${staff.first_name || ''} ${staff.last_name || ''}`.trim() : 'Unassigned',
-            startTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
-            endTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
-            booking_date: booking.booking_date,
-            booking_time: booking.booking_time,
-            status: booking.status as BookingStatus,
-            price: booking.total_price || service?.price || 0, // This is correct - uses booking price first
-            notes: booking.notes || ''
-          };
-        });
+          service_id: b.service_id,
+          service_name: b.services?.service_name || 'Unknown Service',
+          service_price: b.services?.price ?? 0,
+          service_duration: b.services?.duration ?? 60,
 
-        setRecentBookings(transformedBookings);
-      } else {
-        setRecentBookings([]);
-      }
+          customer_id: b.customer_id ?? null,
+          customer_name: displayCustomerName,
+          customer_email: isWalkIn ? '' : (b.customers?.email || ''),
 
-      // Fetch statistics
+          walk_in_customer_id: b.walk_in_customer_id ?? null,
+          walk_in_customer_name: b.walkin?.name || '',
+          walk_in_customer_phone: b.walkin?.phone_num || '',
+          isWalkIn,
+
+          staff_id: b.staff_id ?? null,
+          staff_name: staffName,
+
+          booking_date: b.booking_date,
+          booking_time: b.booking_time,
+
+          status: b.status as BookingStatus,
+          price: b.total_price ?? (b.services?.price ?? 0),
+          notes: b.notes || ''
+        };
+      });
+
+      setRecentBookings(transformed);
+
       await fetchDashboardStats();
-
     } catch (err: any) {
       console.error('❌ Error fetching dashboard data:', err);
-      
+
       if (err.message?.includes('JWT')) {
         setError('Authentication error. Please log in again.');
       } else if (err.message?.includes('policy')) {
         setError('Permission denied. You may need RLS policies configured.');
       } else {
-        setError('Failed to load dashboard data. Please try again.');
+        setError(`Failed to load dashboard data: ${err.message}`);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // FIXED: Use the same logic as the recent bookings table
   const fetchTotalRevenue = async (): Promise<number> => {
     try {
       setRevenueLoading(true);
-      console.log('🔄 Fetching total revenue...');
-      
-      // Fetch ALL completed bookings (not filtered by date)
+
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('total_price, service_id')
         .eq('status', 'completed');
 
-      if (bookingsError) {
-        console.error('Bookings fetch error:', bookingsError);
-        throw new Error(`Failed to fetch bookings: ${bookingsError.message}`);
-      }
+      if (bookingsError) throw bookingsError;
 
-      console.log(`📊 Found ${bookingsData?.length || 0} completed bookings`);
+      if (!bookingsData || bookingsData.length === 0) return 0;
 
-      if (!bookingsData || bookingsData.length === 0) {
-        return 0;
-      }
+      const serviceIds = filterNullIds([...new Set(bookingsData.map(b => b.service_id))]) as number[];
 
-      // Get service IDs from bookings (for fallback prices)
-      const serviceIds = [...new Set(bookingsData.map(booking => booking.service_id).filter(Boolean))];
-      
-      // Fetch services data for fallback prices only
       let servicesData: any[] = [];
       if (serviceIds.length > 0) {
-        const { data: services, error: servicesError } = await supabase
+        const { data: services } = await supabase
           .from('services')
           .select('id, price')
           .in('id', serviceIds);
-
-        if (!servicesError) {
-          servicesData = services || [];
-        }
+        servicesData = services || [];
       }
 
-      // Create a map for quick service lookup (for fallback only)
-      const servicesMap = new Map(servicesData.map(service => [service.id, service]));
+      const servicesMap = new Map(servicesData.map(s => [s.id, s]));
 
-      // Calculate total revenue using THE SAME LOGIC as the recent bookings table:
-      // Use booking.total_price FIRST, then fallback to service price if needed
-      const totalRevenue = bookingsData.reduce((sum, booking) => {
-        // IMPORTANT: Use booking.total_price FIRST (this is the price stored at booking time)
-        // Only use service price as fallback if booking.total_price is null/undefined
-        const service = servicesMap.get(booking.service_id);
-        const price = booking.total_price || service?.price || 0;
+      return bookingsData.reduce((sum, b) => {
+        const service = servicesMap.get(b.service_id);
+        const price = b.total_price ?? service?.price ?? 0;
         return sum + (Number(price) || 0);
       }, 0);
-
-      console.log(`💰 Calculated total revenue: ${formatCurrency(totalRevenue)}`);
-      return totalRevenue;
-
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error in fetchTotalRevenue:', err);
       return 0;
     } finally {
@@ -223,16 +201,12 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Fetch dashboard statistics with better error handling
   const fetchDashboardStats = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
 
-      console.log('🔄 Fetching dashboard statistics...');
-
-      // Initialize stats
       const newStats: DashboardStats = {
-        totalRevenue: 0,
+        totalRevenue: await fetchTotalRevenue(),
         todayBookings: 0,
         activeStaff: 0,
         pendingBookings: 0,
@@ -240,191 +214,130 @@ const AdminDashboard: React.FC = () => {
         completedBookings: 0
       };
 
-      // Get total revenue using the accurate function
-      newStats.totalRevenue = await fetchTotalRevenue();
-
-      // Get today's bookings
+      // today's bookings
       try {
-        const { data: todayData, error: todayError } = await supabase
-          .from('bookings')
-          .select('id')
-          .eq('booking_date', today);
+        const { data } = await supabase.from('bookings').select('id').eq('booking_date', today);
+        newStats.todayBookings = data?.length || 0;
+      } catch {}
 
-        if (!todayError && todayData) {
-          newStats.todayBookings = todayData.length;
-        }
-      } catch (todayErr) {
-        console.error('❌ Error fetching today bookings:', todayErr);
-      }
-
-      // Get staff count
+      // staff count
       try {
-        const { data: staffData, error: staffError } = await supabase
-          .from('users')
-          .select('id')
-          .eq('role', 'staff');
+        const { data } = await supabase.from('users').select('id').eq('role', 'staff');
+        newStats.activeStaff = data?.length || 0;
+      } catch {}
 
-        if (!staffError && staffData) {
-          newStats.activeStaff = staffData.length;
-        }
-      } catch (staffErr) {
-        console.error('❌ Error fetching staff count:', staffErr);
-        // Fallback: count unique staff in bookings
-        try {
-          const { data: bookingsData } = await supabase
-            .from('bookings')
-            .select('staff_id')
-            .not('staff_id', 'is', null);
-
-          if (bookingsData) {
-            const uniqueStaffIds = filterNullIds([...new Set(bookingsData.map(b => b.staff_id))]);
-            newStats.activeStaff = uniqueStaffIds.length;
-          }
-        } catch (fallbackErr) {
-          console.error('❌ Fallback staff count failed:', fallbackErr);
-        }
-      }
-
-      // Get booking counts by status
+      // status counts
       try {
-        const { data: allBookings, error: allError } = await supabase
-          .from('bookings')
-          .select('status');
-
-        if (!allError && allBookings) {
-          newStats.pendingBookings = allBookings.filter(b => b.status === 'pending').length;
-          newStats.confirmedBookings = allBookings.filter(b => b.status === 'confirmed').length;
-          newStats.completedBookings = allBookings.filter(b => b.status === 'completed').length;
+        const { data } = await supabase.from('bookings').select('status');
+        if (data) {
+          newStats.pendingBookings = data.filter(b => b.status === 'pending').length;
+          newStats.confirmedBookings = data.filter(b => b.status === 'confirmed').length;
+          newStats.completedBookings = data.filter(b => b.status === 'completed').length;
         }
-      } catch (statusErr) {
-        console.error('❌ Error fetching booking status counts:', statusErr);
-      }
+      } catch {}
 
-      console.log('✅ Stats calculated:', newStats);
       setStats(newStats);
-
-    } catch (err: any) {
+    } catch (err) {
       console.error('❌ Error in fetchDashboardStats:', err);
     }
   };
 
   useEffect(() => {
     fetchDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Format date and time for display
   const formatDateTime = (date: string, time: string) => {
     if (!date) return 'N/A';
-    
     const dateObj = new Date(date);
     const formattedDate = dateObj.toLocaleDateString();
-    
     if (!time) return formattedDate;
-    
     const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
+    const hour = parseInt(hours, 10);
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour % 12 || 12;
-    
     return `${formattedDate} at ${displayHour}:${minutes} ${ampm}`;
   };
 
   const bookingColumns = [
-    { 
-      header: 'Service', 
-      key: 'serviceName',
-      render: (item: BookingWithRelations) => (
-        <span className="service-name">
-          {item.service_name}
-        </span>
-      )
+    {
+      header: 'Service',
+      key: 'service',
+      render: (item: BookingWithRelations) => <span className="service-name">{item.service_name}</span>
     },
-    { 
-      header: 'Customer', 
-      key: 'customerName',
+    {
+      header: 'Customer',
+      key: 'customer',
       render: (item: BookingWithRelations) => (
         <div className="customer-info-container">
-          <div className="customer-name">{item.customer_name}</div>
-          {item.customer_email && (
-            <div className="customer-email">
-              ✉️ {item.customer_email}
-            </div>
+          <div className="customer-name">
+            {item.customer_name}
+            {item.isWalkIn && (
+              <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>
+                (Walk-in)
+              </span>
+            )}
+          </div>
+          {!item.isWalkIn ? (
+            item.customer_email && <div className="customer-email">✉️ {item.customer_email}</div>
+          ) : (
+            <div className="customer-email">📞 {item.walk_in_customer_phone || '—'}</div>
           )}
         </div>
       )
     },
-    { 
-      header: 'Staff', 
-      key: 'staffName',
-      render: (item: BookingWithRelations) => (
-        <span className="staff-name">
-          {item.staff_name || 'Unassigned'}
-        </span>
-      )
+    {
+      header: 'Staff',
+      key: 'staff',
+      render: (item: BookingWithRelations) => <span className="staff-name">{item.staff_name || 'Unassigned'}</span>
     },
-    { 
-      header: 'Date & Time', 
+    {
+      header: 'Date & Time',
       key: 'datetime',
       render: (item: BookingWithRelations) => (
-        <span className="datetime-text">
-          {formatDateTime(item.booking_date, item.booking_time)}
-        </span>
+        <span className="datetime-text">{formatDateTime(item.booking_date, item.booking_time)}</span>
       )
     },
-    { 
-      header: 'Price', 
+    {
+      header: 'Price',
       key: 'price',
       render: (item: BookingWithRelations) => formatCurrency(item.price)
     },
-    { 
-      header: 'Status', 
+    {
+      header: 'Status',
       key: 'status',
-      render: (item: BookingWithRelations) => {
-        const statusClass = `booking-status-badge booking-status-badge-${item.status}`;
-        return (
-          <span className={statusClass}>
-            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-          </span>
-        );
-      }
-    },
+      render: (item: BookingWithRelations) => (
+        <span className={`booking-status-badge booking-status-badge-${item.status}`}>
+          {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+        </span>
+      )
+    }
   ];
 
   return (
     <div className="dashboard-layout-container">
       <div className="dashboard-main-content">
         <DashboardHeader title={`Hello Admin, ${user?.first_name}!`} />
+
         <div className="dashboard-content-wrapper">
-          {/* Error Message */}
           {error && (
             <div className="dashboard-error">
               <strong>Error:</strong> {error}
               <div className="dashboard-error-actions">
-                <Button 
-                  variant="text" 
-                  size="small" 
+                <Button
+                  variant="text"
+                  size="small"
                   onClick={fetchDashboardData}
                   style={{ fontSize: '14px', marginRight: '8px' }}
                 >
                   Try Again
                 </Button>
-                <Button 
-                  variant="text" 
-                  size="small" 
-                  onClick={() => console.log('Debug info:', { recentBookings, stats, user })}
-                  style={{ fontSize: '14px' }}
-                >
-                  Debug Info
-                </Button>
               </div>
             </div>
           )}
 
-          <h2 className="dashboard-page-title">
-            Dashboard Overview
-          </h2>
+          <h2 className="dashboard-page-title">Dashboard Overview</h2>
 
-          {/* Quick Stats */}
           <div className="quick-stats-grid">
             <div className="stat-card stat-card-revenue">
               <h4 className="stat-title stat-title-revenue">Total Revenue</h4>
@@ -435,51 +348,36 @@ const AdminDashboard: React.FC = () => {
                 All Completed Bookings • {stats.completedBookings} bookings
               </p>
             </div>
-            
+
             <div className="stat-card stat-card-today">
               <h4 className="stat-title stat-title-today">Today's Bookings</h4>
-              <p className="stat-value stat-value-today">
-                {stats.todayBookings}
-              </p>
-              <p className="stat-description">
-                Appointments Today
-              </p>
+              <p className="stat-value stat-value-today">{stats.todayBookings}</p>
+              <p className="stat-description">Appointments Today</p>
             </div>
-            
+
             <div className="stat-card stat-card-staff">
               <h4 className="stat-title stat-title-staff">Active Staff</h4>
-              <p className="stat-value stat-value-staff">
-                {stats.activeStaff}
-              </p>
-              <p className="stat-description">
-                Staff Members
-              </p>
+              <p className="stat-value stat-value-staff">{stats.activeStaff}</p>
+              <p className="stat-description">Staff Members</p>
             </div>
           </div>
 
-          {/* Booking Status Overview */}
           <div className="booking-status-grid">
             <div className="status-card status-card-pending">
               <h4 className="status-title status-title-pending">Pending</h4>
-              <p className="status-value status-value-pending">
-                {stats.pendingBookings}
-              </p>
+              <p className="status-value status-value-pending">{stats.pendingBookings}</p>
             </div>
-            
+
             <div className="status-card status-card-confirmed">
               <h4 className="status-title status-title-confirmed">Confirmed</h4>
-              <p className="status-value status-value-confirmed">
-                {stats.confirmedBookings}
-              </p>
+              <p className="status-value status-value-confirmed">{stats.confirmedBookings}</p>
             </div>
-            
+
             <div className="status-card status-card-completed">
               <h4 className="status-title status-title-completed">Completed</h4>
-              <p className="status-value status-value-completed">
-                {stats.completedBookings}
-              </p>
+              <p className="status-value status-value-completed">{stats.completedBookings}</p>
             </div>
-            
+
             <div className="status-card status-card-total">
               <h4 className="status-title status-title-total">Total</h4>
               <p className="status-value status-value-total">
@@ -488,40 +386,28 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Actions */}
           <div className="quick-actions-grid">
             <Link to="/admin/bookings" className="action-card action-card-bookings">
               <h4 className="action-title action-title-bookings">📊 All Bookings</h4>
-              <p className="action-description">
-                Manage and view all appointments
-              </p>
+              <p className="action-description">Manage and view all appointments</p>
             </Link>
-            
+
             <Link to="/admin/staff" className="action-card action-card-staff">
               <h4 className="action-title action-title-staff">👥 Staff Management</h4>
-              <p className="action-description">
-                Manage staff members and schedules
-              </p>
+              <p className="action-description">Manage staff members and schedules</p>
             </Link>
-            
+
             <Link to="/admin/services" className="action-card action-card-services">
               <h4 className="action-title action-title-services">💅 Services</h4>
-              <p className="action-description">
-                Manage services and pricing
-              </p>
+              <p className="action-description">Manage services and pricing</p>
             </Link>
           </div>
 
-          {/* Recent Bookings Section */}
           <section className="recent-bookings-section">
             <div className="recent-bookings-header">
-              <h3 className="recent-bookings-title">
-                Recent Bookings
-              </h3>
+              <h3 className="recent-bookings-title">Recent Bookings</h3>
               <Link to="/admin/bookings">
-                <Button variant="primary" size="medium">
-                  View All Bookings
-                </Button>
+                <Button variant="primary" size="medium">View All Bookings</Button>
               </Link>
             </div>
 
@@ -531,17 +417,11 @@ const AdminDashboard: React.FC = () => {
               </div>
             ) : recentBookings.length > 0 ? (
               <div className="table-responsive">
-                <Table 
-                  data={recentBookings} 
-                  columns={bookingColumns}
-                  className="booking-table"
-                />
+                <Table data={recentBookings} columns={bookingColumns} className="booking-table" />
               </div>
             ) : (
               <div className="dashboard-empty-state">
-                <p className="empty-state-message">
-                  No recent bookings found.
-                </p>
+                <p className="empty-state-message">No recent bookings found.</p>
                 <p className="empty-state-subtext">
                   When customers book appointments, they will appear here.
                 </p>

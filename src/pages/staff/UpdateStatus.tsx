@@ -1,87 +1,67 @@
-// src/pages/staff/UpdateStatus.tsx
+// src/pages/staff/UpdateStatus.tsx - UPDATED (supports walk-in customers + fixes null UUID issue)
+// NOTE: Replace `bookings_walkin_fk` below with YOUR actual FK name (the same one that works in ManageBookings.tsx).
 import React, { useState, useEffect } from 'react';
 import DashboardHeader from '@components/dashboard/DashboardHeader';
 import Table from '@components/dashboard/Table';
 import Button from '@components/common/Button';
 import Modal from '@components/common/Modal';
 import { useModal } from '@hooks/useModal';
-import { Booking, BookingStatus } from '@models/booking';
-import { formatCurrency, formatDate } from '@utils/helpers';
+import { BookingStatus } from '@models/booking';
+import { formatCurrency } from '@utils/helpers';
 import { useAuth } from '@context/AuthContext';
 import { supabase } from '../../supabaseClient';
 import { SupabaseNotificationService } from '../../services/supabaseNotificationService';
 import "../../assets/styles/staffdashboards.css";
 
-interface BookingWithRelations extends Booking {
+interface BookingWithRelations {
+  id: string;
+
+  service_id: number;
   service_name: string;
   service_price: number;
   service_duration: number;
+
+  // registered customer (users)
+  customer_id: string | null;
   customer_name: string;
   customer_email: string;
-  customer_phone: string;
+
+  // walk-in customer
+  walk_in_customer_id: string | null;
+  walk_in_customer_name: string;
+  walk_in_customer_phone: string;
+  isWalkIn: boolean;
+
+  staff_id: string | null;
   staff_name: string;
+
   booking_date: string;
   booking_time: string;
+  status: BookingStatus;
+  price: number;
+  notes: string;
 }
 
 const UpdateStatus: React.FC = () => {
   const { user } = useAuth();
+
   const [bookings, setBookings] = useState<BookingWithRelations[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<BookingWithRelations | null>(null);
   const [newStatus, setNewStatus] = useState<BookingStatus | ''>('');
+
   const { isOpen, openModal, closeModal } = useModal();
+
   const [loading, setLoading] = useState(false);
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const fetchCustomerDetails = async (customerIds: string[]) => {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, first_name, last_name, email')
-        .in('id', customerIds);
-
-      if (error) {
-        console.error('Error fetching customer details:', error);
-        return customerIds.map(id => ({
-          id,
-          first_name: 'Customer',
-          last_name: '',
-          email: 'unknown@example.com',
-          phone: 'Unknown'
-        }));
-      }
-
-      if (!data || data.length === 0) {
-        return customerIds.map(id => ({
-          id,
-          first_name: 'Customer',
-          last_name: '',
-          email: 'unknown@example.com',
-          phone: 'Unknown'
-        }));
-      }
-
-      return data.map(user => ({
-        id: user.id,
-        first_name: user.first_name || 'Customer',
-        last_name: user.last_name || '',
-        email: user.email || 'unknown@example.com',
-        phone: 'Unknown'
-      }));
-
-    } catch (err) {
-      console.error('Error in fetchCustomerDetails:', err);
-      return customerIds.map(id => ({
-        id,
-        first_name: 'Customer',
-        last_name: '',
-        email: 'unknown@example.com',
-        phone: 'Unknown'
-      }));
-    }
-  };
+  /**
+   * IMPORTANT:
+   * - This MUST match the FK embed you used in ManageBookings:
+   *   walkin:walk_in_customers!bookings_walkin_fk (name, phone_num)
+   */
+  const WALKIN_FK_JOIN = 'bookings_walkin_fk';
 
   const fetchStaffBookings = async () => {
     try {
@@ -90,73 +70,78 @@ const UpdateStatus: React.FC = () => {
 
       if (!user) {
         setError('Please log in to view your appointments.');
+        setBookings([]);
         return;
       }
 
+      // ✅ Embed relations like ManageBookings so walk-ins are handled safely
       const { data, error } = await supabase
         .from('bookings')
-        .select('*')
+        .select(`
+          id,
+          service_id,
+          customer_id,
+          walk_in_customer_id,
+          staff_id,
+          booking_date,
+          booking_time,
+          status,
+          total_price,
+          notes,
+          created_at,
+          updated_at,
+
+          services:service_id (service_name, price, duration),
+          customers:customer_id (first_name, last_name, email),
+          walkin:walk_in_customers!${WALKIN_FK_JOIN} (name, phone_num)
+        `)
         .eq('staff_id', user.id)
         .order('booking_date', { ascending: true })
         .order('booking_time', { ascending: true });
 
-      if (error) {
-        console.error('Error fetching staff bookings:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      if (data && data.length > 0) {
-        const serviceIds = [...new Set(data.map(booking => booking.service_id))];
-        
-        const { data: servicesData, error: servicesError } = await supabase
-          .from('services')
-          .select('*')
-          .in('id', serviceIds);
+      const mapped: BookingWithRelations[] = (data || []).map((b: any) => {
+        const isWalkIn = !!b.walk_in_customer_id;
 
-        if (servicesError) {
-          console.error('Error fetching services:', servicesError);
-        }
+        const regName = `${b.customers?.first_name || ''} ${b.customers?.last_name || ''}`.trim();
+        const walkName = b.walkin?.name || '';
 
-        const customerIds = [...new Set(data.map(booking => booking.customer_id))];
-        const customersData = await fetchCustomerDetails(customerIds);
+        const displayName = (isWalkIn ? walkName : regName) || 'Unknown Customer';
 
-        const staffBookings: BookingWithRelations[] = data.map(booking => {
-          const service = servicesData?.find(s => s.id === booking.service_id);
-          const customer = customersData?.find(c => c.id === booking.customer_id);
-          
-          return {
-            id: booking.id,
-            serviceId: booking.service_id,
-            serviceName: service?.service_name || 'Unknown Service',
-            service_name: service?.service_name || 'Unknown Service',
-            service_price: service?.price || 0,
-            service_duration: service?.duration || 60,
-            customerId: booking.customer_id,
-            customerName: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
-            customer_name: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
-            customer_email: customer?.email || '',
-            customer_phone: customer?.phone || 'Unknown',
-            staffId: booking.staff_id,
-            staffName: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
-            staff_name: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
-            startTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
-            endTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
-            booking_date: booking.booking_date,
-            booking_time: booking.booking_time,
-            status: booking.status as BookingStatus,
-            price: booking.total_price || service?.price || 0,
-            notes: booking.notes || ''
-          };
-        });
+        return {
+          id: b.id,
 
-        setBookings(staffBookings);
-      } else {
-        setBookings([]);
-      }
+          service_id: b.service_id,
+          service_name: b.services?.service_name || 'Unknown Service',
+          service_price: b.services?.price ?? 0,
+          service_duration: b.services?.duration ?? 60,
 
+          customer_id: b.customer_id ?? null,
+          customer_name: displayName,
+          customer_email: isWalkIn ? '' : (b.customers?.email || ''),
+
+          walk_in_customer_id: b.walk_in_customer_id ?? null,
+          walk_in_customer_name: b.walkin?.name || '',
+          walk_in_customer_phone: b.walkin?.phone_num || '',
+          isWalkIn,
+
+          staff_id: b.staff_id ?? null,
+          staff_name: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
+
+          booking_date: b.booking_date,
+          booking_time: b.booking_time,
+          status: b.status as BookingStatus,
+          price: b.total_price ?? (b.services?.price ?? 0),
+          notes: b.notes || ''
+        };
+      });
+
+      setBookings(mapped);
     } catch (err: any) {
       console.error('Error fetching staff bookings:', err);
-      setError('Failed to load your appointments. Please try again.');
+      setError(`Failed to load your appointments: ${err.message}`);
+      setBookings([]);
     } finally {
       setBookingsLoading(false);
     }
@@ -164,13 +149,8 @@ const UpdateStatus: React.FC = () => {
 
   useEffect(() => {
     fetchStaffBookings();
-  }, [user]);
-
-  const handleUpdateClick = (booking: BookingWithRelations) => {
-    setSelectedBooking(booking);
-    setNewStatus(booking.status);
-    openModal();
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const handleConfirmUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -183,7 +163,7 @@ const UpdateStatus: React.FC = () => {
     try {
       const { error } = await supabase
         .from('bookings')
-        .update({ 
+        .update({
           status: newStatus,
           updated_at: new Date().toISOString()
         })
@@ -192,33 +172,39 @@ const UpdateStatus: React.FC = () => {
 
       if (error) throw error;
 
+      // ✅ Only send in-app notifications to registered users (walk-ins have no app account)
       let notificationSent = false;
       try {
-        if (newStatus === 'confirmed') {
-          await SupabaseNotificationService.createBookingNotification(selectedBooking.id, 'booking_confirmed');
-          notificationSent = true;
-        } else if (newStatus === 'completed') {
-          await SupabaseNotificationService.createBookingNotification(selectedBooking.id, 'booking_completed');
-          notificationSent = true;
-        } else if (newStatus === 'cancelled') {
-          await SupabaseNotificationService.createBookingNotification(selectedBooking.id, 'booking_cancelled');
-          notificationSent = true;
+        if (!selectedBooking.isWalkIn && selectedBooking.customer_id) {
+          if (newStatus === 'confirmed') {
+            await SupabaseNotificationService.createBookingNotification(selectedBooking.id, 'booking_confirmed');
+            notificationSent = true;
+          } else if (newStatus === 'completed') {
+            await SupabaseNotificationService.createBookingNotification(selectedBooking.id, 'booking_completed');
+            notificationSent = true;
+          } else if (newStatus === 'cancelled') {
+            await SupabaseNotificationService.createBookingNotification(selectedBooking.id, 'booking_cancelled');
+            notificationSent = true;
+          }
         }
       } catch (notificationError) {
         console.error('Notification failed, but booking was updated:', notificationError);
       }
 
-      const successMessage = notificationSent 
-        ? `Booking status updated to ${newStatus} successfully! Notification sent to customer.`
-        : `Booking status updated to ${newStatus} successfully!`;
+      const msg =
+        selectedBooking.isWalkIn
+          ? `Booking status updated to ${newStatus} successfully! (Walk-in: no in-app notification)`
+          : notificationSent
+            ? `Booking status updated to ${newStatus} successfully! Notification sent to customer.`
+            : `Booking status updated to ${newStatus} successfully!`;
 
-      setSuccess(successMessage);
-      
+      setSuccess(msg);
+
       await fetchStaffBookings();
-      
+
       setTimeout(() => {
         closeModal();
-      }, 2000);
+      }, 1500);
     } catch (err: any) {
       console.error('Status update error:', err);
       setError(err.message || 'Failed to update booking status.');
@@ -229,23 +215,23 @@ const UpdateStatus: React.FC = () => {
 
   const formatDateTime = (date: string, time: string) => {
     if (!date) return 'N/A';
-    
+
     const dateObj = new Date(date);
     const formattedDate = dateObj.toLocaleDateString();
-    
+
     if (!time) return formattedDate;
-    
+
     const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
+    const hour = parseInt(hours, 10);
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour % 12 || 12;
-    
+
     return `${formattedDate} at ${displayHour}:${minutes} ${ampm}`;
   };
 
   const getAvailableStatusOptions = (currentStatus: BookingStatus) => {
     const options: { value: BookingStatus; label: string; description: string }[] = [];
-    
+
     switch (currentStatus) {
       case 'pending':
         options.push(
@@ -260,9 +246,7 @@ const UpdateStatus: React.FC = () => {
         );
         break;
       case 'completed':
-        options.push(
-          { value: 'confirmed', label: 'Re-open', description: 'Re-open this completed appointment' }
-        );
+        options.push({ value: 'confirmed', label: 'Re-open', description: 'Re-open this completed appointment' });
         break;
       case 'cancelled':
         options.push(
@@ -271,41 +255,56 @@ const UpdateStatus: React.FC = () => {
         );
         break;
     }
-    
+
     return options;
   };
 
   const columns = [
-    { 
-      header: 'Service', 
-      key: 'serviceName',
+    {
+      header: 'Service',
+      key: 'service',
       render: (item: BookingWithRelations) => item.service_name
     },
-    { 
-      header: 'Customer', 
-      key: 'customerName',
+    {
+      header: 'Customer',
+      key: 'customer',
       render: (item: BookingWithRelations) => (
         <div>
-          <div className="customer-name">{item.customer_name}</div>
-          <div className="customer-email">
-            ✉️ {item.customer_email}
+          <div className="customer-name">
+            {item.customer_name}
+            {item.isWalkIn && (
+              <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>
+                (Walk-in)
+              </span>
+            )}
           </div>
+
+          {!item.isWalkIn ? (
+            <div className="customer-email">✉️ {item.customer_email || '—'}</div>
+          ) : (
+            <div className="customer-email">📞 {item.walk_in_customer_phone || '—'}</div>
+          )}
         </div>
       )
     },
-    { 
-      header: 'Date & Time', 
+    {
+      header: 'Date & Time',
       key: 'datetime',
       render: (item: BookingWithRelations) => formatDateTime(item.booking_date, item.booking_time)
     },
-    { 
-      header: 'Current Status', 
+    {
+      header: 'Current Status',
       key: 'status',
       render: (item: BookingWithRelations) => {
-        const statusClass = item.status === 'confirmed' ? 'booking-status-badge-confirmed' :
-                           item.status === 'completed' ? 'booking-status-badge-completed' :
-                           item.status === 'cancelled' ? 'booking-status-badge-cancelled' : 'booking-status-badge-pending';
-        
+        const statusClass =
+          item.status === 'confirmed'
+            ? 'booking-status-badge-confirmed'
+            : item.status === 'completed'
+              ? 'booking-status-badge-completed'
+              : item.status === 'cancelled'
+                ? 'booking-status-badge-cancelled'
+                : 'booking-status-badge-pending';
+
         return (
           <span className={`booking-status-badge ${statusClass}`}>
             {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
@@ -313,8 +312,8 @@ const UpdateStatus: React.FC = () => {
         );
       }
     },
-    { 
-      header: 'Price', 
+    {
+      header: 'Price',
       key: 'price',
       render: (item: BookingWithRelations) => formatCurrency(item.price)
     },
@@ -323,11 +322,11 @@ const UpdateStatus: React.FC = () => {
       key: 'actions',
       render: (item: BookingWithRelations) => {
         const availableOptions = getAvailableStatusOptions(item.status);
-        
+
         return availableOptions.length > 0 ? (
           <div className="status-actions">
             {availableOptions.map(option => (
-              <Button 
+              <Button
                 key={option.value}
                 variant={option.value === 'cancelled' ? 'text' : 'secondary'}
                 size="small"
@@ -343,44 +342,22 @@ const UpdateStatus: React.FC = () => {
             ))}
           </div>
         ) : (
-          <span className="no-actions-label">
-            No actions available
-          </span>
+          <span className="no-actions-label">No actions available</span>
         );
       }
-    },
+    }
   ];
 
-  const activeBookings = bookings.filter(booking => 
-    booking.status === 'pending' || booking.status === 'confirmed'
-  );
-
-  const allBookings = bookings;
+  const activeBookings = bookings.filter(b => b.status === 'pending' || b.status === 'confirmed');
 
   return (
     <div className="dashboard-layout-container">
       <div className="dashboard-main-content">
         <div className="dashboard-content-wrapper">
           <DashboardHeader title="Manage Appointments" />
-          
-          {/* <div className="booking-header">
-            <h1 className="page-title">Manage Appointments</h1>
-            <p className="page-subtitle">
-              Confirm, complete, or cancel customer appointments assigned to you.
-            </p>
-          </div> */}
 
-          {error && (
-            <div className="dashboard-error">
-              {error}
-            </div>
-          )}
-          
-          {success && (
-            <div className="dashboard-success">
-              {success}
-            </div>
-          )}
+          {error && <div className="dashboard-error">{error}</div>}
+          {success && <div className="dashboard-success">{success}</div>}
 
           <div className="stats-grid">
             <div className="stat-card pending-card">
@@ -403,16 +380,9 @@ const UpdateStatus: React.FC = () => {
 
           <div className="upcoming-bookings-section">
             <div className="section-header">
-              <h2 className="section-title">
-                Active Appointments ({activeBookings.length})
-              </h2>
+              <h2 className="section-title">Active Appointments ({activeBookings.length})</h2>
               <div className="section-actions">
-                <Button 
-                  variant="secondary" 
-                  size="small"
-                  onClick={fetchStaffBookings}
-                  className="refresh-button"
-                >
+                <Button variant="secondary" size="small" onClick={fetchStaffBookings} className="refresh-button">
                   Refresh
                 </Button>
               </div>
@@ -434,15 +404,15 @@ const UpdateStatus: React.FC = () => {
             )}
           </div>
 
-          {allBookings.length > 0 && (
+          {bookings.length > 0 && (
             <div className="recent-bookings-section">
               <details className="recent-bookings-details">
                 <summary className="recent-bookings-summary">
-                  All Appointments ({allBookings.length})
+                  All Appointments ({bookings.length})
                   <span className="dropdown-icon">▼</span>
                 </summary>
                 <div className="recent-bookings-content">
-                  <Table data={allBookings} columns={columns} />
+                  <Table data={bookings} columns={columns} />
                 </div>
               </details>
             </div>
@@ -458,9 +428,26 @@ const UpdateStatus: React.FC = () => {
               <p className="booking-service">
                 Updating status for <strong>{selectedBooking.service_name}</strong>
               </p>
+
               <p className="booking-detail">
                 Customer: <strong>{selectedBooking.customer_name}</strong>
+                {selectedBooking.isWalkIn && (
+                  <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>
+                    (Walk-in)
+                  </span>
+                )}
               </p>
+
+              {selectedBooking.isWalkIn ? (
+                <p className="booking-detail">
+                  Phone: <strong>{selectedBooking.walk_in_customer_phone || '—'}</strong>
+                </p>
+              ) : (
+                <p className="booking-detail">
+                  Email: <strong>{selectedBooking.customer_email || '—'}</strong>
+                </p>
+              )}
+
               <p className="booking-detail">
                 Date: <strong>{formatDateTime(selectedBooking.booking_date, selectedBooking.booking_time)}</strong>
               </p>
@@ -486,6 +473,7 @@ const UpdateStatus: React.FC = () => {
                     </option>
                   ))}
                 </select>
+
                 {newStatus && (
                   <small className="status-description">
                     {getAvailableStatusOptions(selectedBooking.status).find(opt => opt.value === newStatus)?.description}
@@ -493,17 +481,8 @@ const UpdateStatus: React.FC = () => {
                 )}
               </div>
 
-              {error && (
-                <div className="form-error">
-                  {error}
-                </div>
-              )}
-
-              {success && (
-                <div className="form-success">
-                  {success}
-                </div>
-              )}
+              {error && <div className="form-error">{error}</div>}
+              {success && <div className="form-success">{success}</div>}
 
               <div className="modal-actions">
                 <Button variant="secondary" onClick={closeModal} disabled={loading}>
@@ -513,6 +492,12 @@ const UpdateStatus: React.FC = () => {
                   {loading ? 'Updating...' : 'Confirm Update'}
                 </Button>
               </div>
+
+              {selectedBooking.isWalkIn && (
+                <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
+                  Note: Walk-in bookings do not receive in-app notifications.
+                </div>
+              )}
             </form>
           </>
         )}

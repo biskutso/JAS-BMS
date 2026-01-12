@@ -1,25 +1,42 @@
-// src/pages/staff/Dashboard.tsx
+// src/pages/staff/Dashboard.tsx - UPDATED (supports walk-in customers assigned to staff + avoids null UUID issues)
 import React, { useState, useEffect } from 'react';
 import DashboardHeader from '@components/dashboard/DashboardHeader';
 import { useAuth } from '@context/AuthContext';
 import Table from '@components/dashboard/Table';
 import Button from '@components/common/Button';
-import { Booking, BookingStatus } from '@models/booking';
-import { formatCurrency, formatDate } from '@utils/helpers';
+import { BookingStatus } from '@models/booking';
+import { formatCurrency } from '@utils/helpers';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import "../../assets/styles/staffdashboards.css";
 
-interface BookingWithRelations extends Booking {
+interface BookingWithRelations {
+  id: string;
+
+  service_id: number;
   service_name: string;
   service_price: number;
   service_duration: number;
+
+  // registered user customer
+  customer_id: string | null;
   customer_name: string;
   customer_email: string;
-  customer_phone: string;
+
+  // walk-in customer
+  walk_in_customer_id: string | null;
+  walk_in_customer_name: string;
+  walk_in_customer_phone: string;
+  isWalkIn: boolean;
+
+  staff_id: string | null;
   staff_name: string;
+
   booking_date: string;
   booking_time: string;
+  status: BookingStatus;
+  price: number;
+  notes?: string;
 }
 
 const StaffDashboard: React.FC = () => {
@@ -28,60 +45,14 @@ const StaffDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch customer details
-  const fetchCustomerDetails = async (customerIds: string[]) => {
-    try {
-      console.log('🔄 Fetching customer details for IDs:', customerIds);
-      
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, first_name, last_name, email')
-        .in('id', customerIds);
+  /**
+   * IMPORTANT:
+   * Use the SAME join name you used in ManageBookings.tsx:
+   * walkin:walk_in_customers!bookings_walkin_fk (name, phone_num)
+   * If yours is different, replace below.
+   */
+  const WALKIN_FK_JOIN = 'bookings_walkin_fk';
 
-      if (error) {
-        console.error('❌ Error fetching customer details:', error);
-        return customerIds.map(id => ({
-          id,
-          first_name: 'Customer',
-          last_name: '',
-          email: 'unknown@example.com',
-          phone: 'Unknown'
-        }));
-      }
-
-      console.log('✅ Customer details fetched:', data);
-
-      if (!data || data.length === 0) {
-        return customerIds.map(id => ({
-          id,
-          first_name: 'Customer',
-          last_name: '',
-          email: 'unknown@example.com',
-          phone: 'Unknown'
-        }));
-      }
-
-      return data.map(user => ({
-        id: user.id,
-        first_name: user.first_name || 'Customer',
-        last_name: user.last_name || '',
-        email: user.email || 'unknown@example.com',
-        phone: 'Unknown'
-      }));
-
-    } catch (err) {
-      console.error('❌ Error in fetchCustomerDetails:', err);
-      return customerIds.map(id => ({
-        id,
-        first_name: 'Customer',
-        last_name: '',
-        email: 'unknown@example.com',
-        phone: 'Unknown'
-      }));
-    }
-  };
-
-  // Fetch staff bookings from Supabase
   const fetchStaffBookings = async () => {
     try {
       setLoading(true);
@@ -89,80 +60,77 @@ const StaffDashboard: React.FC = () => {
 
       if (!user) {
         setError('Please log in to view your appointments.');
+        setBookings([]);
         return;
       }
 
-      console.log('🔄 Fetching bookings for staff:', user.id);
-
       const { data, error } = await supabase
         .from('bookings')
-        .select('*')
+        .select(`
+          id,
+          service_id,
+          customer_id,
+          walk_in_customer_id,
+          staff_id,
+          booking_date,
+          booking_time,
+          status,
+          total_price,
+          notes,
+          created_at,
+          updated_at,
+
+          services:service_id (service_name, price, duration),
+          customers:customer_id (first_name, last_name, email),
+          walkin:walk_in_customers!${WALKIN_FK_JOIN} (name, phone_num)
+        `)
         .eq('staff_id', user.id)
         .order('booking_date', { ascending: true })
         .order('booking_time', { ascending: true });
 
-      if (error) {
-        console.error('❌ Error fetching staff bookings:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('✅ Staff bookings fetched:', data);
+      const mapped: BookingWithRelations[] = (data || []).map((b: any) => {
+        const isWalkIn = !!b.walk_in_customer_id;
 
-      if (data && data.length > 0) {
-        const serviceIds = [...new Set(data.map(booking => booking.service_id))];
-        console.log('🔄 Fetching services for IDs:', serviceIds);
-        
-        const { data: servicesData, error: servicesError } = await supabase
-          .from('services')
-          .select('*')
-          .in('id', serviceIds);
+        const regName = `${b.customers?.first_name || ''} ${b.customers?.last_name || ''}`.trim();
+        const walkName = b.walkin?.name || '';
 
-        if (servicesError) {
-          console.error('❌ Error fetching services:', servicesError);
-        }
+        const displayName = (isWalkIn ? walkName : regName) || 'Unknown Customer';
 
-        console.log('✅ Services fetched:', servicesData);
+        return {
+          id: b.id,
 
-        const customerIds = [...new Set(data.map(booking => booking.customer_id))];
-        const customersData = await fetchCustomerDetails(customerIds);
+          service_id: b.service_id,
+          service_name: b.services?.service_name || 'Unknown Service',
+          service_price: b.services?.price ?? 0,
+          service_duration: b.services?.duration ?? 60,
 
-        const staffBookings: BookingWithRelations[] = data.map(booking => {
-          const service = servicesData?.find(s => s.id === booking.service_id);
-          const customer = customersData?.find(c => c.id === booking.customer_id);
-          
-          return {
-            id: booking.id,
-            serviceId: booking.service_id,
-            serviceName: service?.service_name || 'Unknown Service',
-            service_name: service?.service_name || 'Unknown Service',
-            service_price: service?.price || 0,
-            service_duration: service?.duration || 60,
-            customerId: booking.customer_id,
-            customerName: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
-            customer_name: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : 'Unknown Customer',
-            customer_email: customer?.email || '',
-            customer_phone: customer?.phone || 'Unknown',
-            staffId: booking.staff_id,
-            staffName: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
-            staff_name: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
-            startTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
-            endTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
-            booking_date: booking.booking_date,
-            booking_time: booking.booking_time,
-            status: booking.status as BookingStatus,
-            price: booking.total_price || service?.price || 0,
-            notes: booking.notes || ''
-          };
-        });
+          customer_id: b.customer_id ?? null,
+          customer_name: displayName,
+          customer_email: isWalkIn ? '' : (b.customers?.email || ''),
 
-        setBookings(staffBookings);
-      } else {
-        setBookings([]);
-      }
+          walk_in_customer_id: b.walk_in_customer_id ?? null,
+          walk_in_customer_name: b.walkin?.name || '',
+          walk_in_customer_phone: b.walkin?.phone_num || '',
+          isWalkIn,
 
+          staff_id: b.staff_id ?? null,
+          staff_name: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Current User',
+
+          booking_date: b.booking_date,
+          booking_time: b.booking_time,
+          status: b.status as BookingStatus,
+          price: b.total_price ?? (b.services?.price ?? 0),
+          notes: b.notes || ''
+        };
+      });
+
+      setBookings(mapped);
     } catch (err: any) {
       console.error('❌ Error fetching staff bookings:', err);
-      setError('Failed to load your appointments. Please try again.');
+      setError(`Failed to load your appointments: ${err.message}`);
+      setBookings([]);
     } finally {
       setLoading(false);
     }
@@ -170,60 +138,76 @@ const StaffDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchStaffBookings();
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const formatDateTime = (date: string, time: string) => {
     if (!date) return 'N/A';
-    
+
     const dateObj = new Date(date);
     const formattedDate = dateObj.toLocaleDateString();
-    
+
     if (!time) return formattedDate;
-    
+
     const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
+    const hour = parseInt(hours, 10);
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour % 12 || 12;
-    
+
     return `${formattedDate} at ${displayHour}:${minutes} ${ampm}`;
   };
 
   const columns = [
-    { 
-      header: 'Service', 
-      key: 'serviceName',
+    {
+      header: 'Service',
+      key: 'service',
       render: (item: BookingWithRelations) => item.service_name
     },
-    { 
-      header: 'Customer', 
-      key: 'customerName',
+    {
+      header: 'Customer',
+      key: 'customer',
       render: (item: BookingWithRelations) => (
         <div>
-          <div style={{ fontWeight: '500' }}>{item.customer_name}</div>
-          <div className="customer-email">
-            ✉️ {item.customer_email}
+          <div style={{ fontWeight: '500' }}>
+            {item.customer_name}
+            {item.isWalkIn && (
+              <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>
+                (Walk-in)
+              </span>
+            )}
           </div>
+
+          {!item.isWalkIn ? (
+            <div className="customer-email">✉️ {item.customer_email || '—'}</div>
+          ) : (
+            <div className="customer-email">📞 {item.walk_in_customer_phone || '—'}</div>
+          )}
         </div>
       )
     },
-    { 
-      header: 'Date & Time', 
+    {
+      header: 'Date & Time',
       key: 'datetime',
       render: (item: BookingWithRelations) => formatDateTime(item.booking_date, item.booking_time)
     },
-    { 
-      header: 'Price', 
+    {
+      header: 'Price',
       key: 'price',
       render: (item: BookingWithRelations) => formatCurrency(item.price)
     },
-    { 
-      header: 'Status', 
+    {
+      header: 'Status',
       key: 'status',
       render: (item: BookingWithRelations) => {
-        const statusClass = item.status === 'confirmed' ? 'booking-status-badge-confirmed' :
-                           item.status === 'completed' ? 'booking-status-badge-completed' :
-                           item.status === 'cancelled' ? 'booking-status-badge-cancelled' : 'booking-status-badge-pending';
-        
+        const statusClass =
+          item.status === 'confirmed'
+            ? 'booking-status-badge-confirmed'
+            : item.status === 'completed'
+              ? 'booking-status-badge-completed'
+              : item.status === 'cancelled'
+                ? 'booking-status-badge-cancelled'
+                : 'booking-status-badge-pending';
+
         return (
           <span className={`booking-status-badge ${statusClass}`}>
             {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
@@ -235,13 +219,9 @@ const StaffDashboard: React.FC = () => {
       header: 'Actions',
       key: 'actions',
       render: (item: BookingWithRelations) => (
-        (item.status === 'pending' || item.status === 'confirmed') ? (
+        item.status === 'pending' || item.status === 'confirmed' ? (
           <Link to="/staff/update-status">
-            <Button 
-              variant="secondary" 
-              size="small" 
-              className="manage-button"
-            >
+            <Button variant="secondary" size="small" className="manage-button">
               Manage
             </Button>
           </Link>
@@ -249,7 +229,7 @@ const StaffDashboard: React.FC = () => {
           <span className="completed-label">Completed</span>
         )
       )
-    },
+    }
   ];
 
   const upcomingBookings = bookings.filter(b => b.status === 'pending' || b.status === 'confirmed');
@@ -257,6 +237,7 @@ const StaffDashboard: React.FC = () => {
 
   const today = new Date().toISOString().split('T')[0];
   const todaysBookings = bookings.filter(b => b.booking_date === today);
+
   const pendingBookings = bookings.filter(b => b.status === 'pending').length;
   const confirmedBookings = bookings.filter(b => b.status === 'confirmed').length;
   const completedBookings = bookings.filter(b => b.status === 'completed').length;
@@ -266,21 +247,14 @@ const StaffDashboard: React.FC = () => {
       <div className="dashboard-main-content">
         <div className="dashboard-content-wrapper">
           <DashboardHeader title={`Welcome, ${user?.first_name || 'Staff'}!`} />
-          
-          {/* <div className="booking-header">
-            <h1 className="page-title">Staff Dashboard</h1>
-            <p className="page-subtitle">
-              Manage your appointments, view your schedule, and update booking statuses.
-            </p>
-          </div> */}
 
           {error && (
             <div className="dashboard-error">
               {error}
               <div style={{ marginTop: '8px' }}>
-                <Button 
-                  variant="text" 
-                  size="small" 
+                <Button
+                  variant="text"
+                  size="small"
                   onClick={fetchStaffBookings}
                   className="retry-button"
                 >
@@ -313,18 +287,14 @@ const StaffDashboard: React.FC = () => {
             <Link to="/staff/schedule" className="quick-action-link">
               <div className="quick-action-card schedule-action-card">
                 <h4 className="action-title">📅 View Schedule</h4>
-                <p className="action-description">
-                  Check your daily appointments and availability
-                </p>
+                <p className="action-description">Check your daily appointments and availability</p>
               </div>
             </Link>
-            
+
             <Link to="/staff/update-status" className="quick-action-link">
               <div className="quick-action-card manage-action-card">
                 <h4 className="action-title">⚡ Manage Appointments</h4>
-                <p className="action-description">
-                  Update status and manage customer appointments
-                </p>
+                <p className="action-description">Update status and manage customer appointments</p>
               </div>
             </Link>
           </div>
@@ -335,12 +305,17 @@ const StaffDashboard: React.FC = () => {
                 Upcoming Appointments ({upcomingBookings.length})
               </h2>
               <div className="section-actions">
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={fetchStaffBookings}
+                  className="refresh-button"
+                >
+                  Refresh
+                </Button>
+
                 <Link to="/staff/schedule">
-                  <Button 
-                    variant="primary" 
-                    size="small" 
-                    className="view-full-button"
-                  >
+                  <Button variant="primary" size="small" className="view-full-button">
                     View Full Schedule
                   </Button>
                 </Link>
@@ -381,8 +356,9 @@ const StaffDashboard: React.FC = () => {
             <div className="welcome-message">
               <h3>Welcome to Your Staff Dashboard!</h3>
               <p>
-                This is where you'll manage all your appointments. When customers book services and select you as their preferred staff, 
-                their appointments will appear here.
+                This is where you'll manage all your appointments. When customers book services and select you
+                as their preferred staff (or when an admin assigns you a walk-in booking), their appointments
+                will appear here.
               </p>
               <div className="welcome-actions">
                 <Link to="/staff/schedule">

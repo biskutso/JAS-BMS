@@ -49,7 +49,7 @@ const ManageServices: React.FC = () => {
       if (error) throw error;
 
       // Transform data to match Service interface
-      const transformedServices: Service[] = (data || []).map(service => ({
+      const transformedServices: Service[] = (data || []).map((service: any) => ({
         id: service.id,
         name: service.service_name,
         description: service.description,
@@ -75,17 +75,15 @@ const ManageServices: React.FC = () => {
   const uploadImage = async (file: File): Promise<string> => {
     try {
       setUploading(true);
-      
-      // Generate unique file name
+
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
       const filePath = `service-images/${fileName}`;
 
       console.log('Uploading to bucket: service_img, path:', filePath);
 
-      // Upload image to Supabase Storage - make sure bucket name matches exactly
       const { error: uploadError } = await supabase.storage
-        .from('service_img') // Make sure this matches your bucket name exactly
+        .from('service_img')
         .upload(filePath, file);
 
       if (uploadError) {
@@ -93,7 +91,6 @@ const ManageServices: React.FC = () => {
         throw uploadError;
       }
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('service_img')
         .getPublicUrl(filePath);
@@ -118,6 +115,7 @@ const ManageServices: React.FC = () => {
       category: service.category,
       service_img: service.imageUrl || ''
     });
+    setError(null);
     openModal();
   };
 
@@ -131,10 +129,13 @@ const ManageServices: React.FC = () => {
       category: 'facial',
       service_img: ''
     });
+    setError(null);
     openModal();
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
     const { name, value, type } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -146,13 +147,11 @@ const ManageServices: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       setError('Please select an image file');
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       setError('Image size must be less than 5MB');
       return;
@@ -167,7 +166,6 @@ const ManageServices: React.FC = () => {
     }
   };
 
-  // Add this validation function
   const validateForm = (): string | null => {
     if (!formData.service_name.trim()) return 'Service name is required';
     if (!formData.description.trim()) return 'Description is required';
@@ -177,14 +175,12 @@ const ManageServices: React.FC = () => {
     return null;
   };
 
-  // Update your handleSubmit to use validation
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setSuccessMessage(null);
 
-    // Validate form
     const validationError = validateForm();
     if (validationError) {
       setError(validationError);
@@ -193,35 +189,19 @@ const ManageServices: React.FC = () => {
     }
 
     try {
-      // Validate required fields
-      if (!formData.service_name.trim()) {
-        throw new Error('Service name is required');
-      }
-      if (!formData.description.trim()) {
-        throw new Error('Description is required');
-      }
-      if (formData.price <= 0) {
-        throw new Error('Price must be greater than 0');
-      }
-      if (formData.duration < 15) {
-        throw new Error('Duration must be at least 15 minutes');
-      }
-
-      const serviceData = {
+      const serviceData: any = {
         service_name: formData.service_name.trim(),
         description: formData.description.trim(),
         price: formData.price,
         duration: formData.duration,
         category: formData.category,
-        service_img: formData.service_img || null, // Use null instead of empty string
-        created_at: new Date().toISOString(),
+        service_img: formData.service_img || null,
         ...(!editingService && { created_at: new Date().toISOString() })
       };
 
       console.log('Submitting service data:', serviceData);
 
       if (editingService) {
-        // Update existing service
         const { error } = await supabase
           .from('services')
           .update(serviceData)
@@ -231,18 +211,16 @@ const ManageServices: React.FC = () => {
           console.error('Update error:', error);
           throw error;
         }
-        
+
         setSuccessMessage('Service updated successfully');
       } else {
-        // Create new service
         const { error } = await supabase
           .from('services')
           .insert([serviceData]);
 
         if (error) {
           console.error('Insert error:', error);
-          
-          // More specific error messages
+
           if (error.message.includes('row-level security')) {
             throw new Error('Database permissions error. Please check RLS policies.');
           } else if (error.message.includes('violates')) {
@@ -251,12 +229,12 @@ const ManageServices: React.FC = () => {
             throw error;
           }
         }
-        
+
         setSuccessMessage('Service added successfully');
       }
 
       setTimeout(() => setSuccessMessage(null), 3000);
-      await fetchServices(); // Refresh the list
+      await fetchServices();
       closeModal();
     } catch (err: any) {
       console.error('Save error:', err);
@@ -272,6 +250,7 @@ const ManageServices: React.FC = () => {
     setLoading(true);
     setError(null);
     setSuccessMessage(null);
+
     try {
       const { error } = await supabase
         .from('services')
@@ -280,7 +259,7 @@ const ManageServices: React.FC = () => {
 
       if (error) throw error;
 
-      await fetchServices(); // Refresh the list
+      await fetchServices();
       setSuccessMessage('Service deleted successfully');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
@@ -291,8 +270,8 @@ const ManageServices: React.FC = () => {
   };
 
   const columns = [
-    { 
-      header: 'Service Name', 
+    {
+      header: 'Service Name',
       key: 'name',
       render: (item: Service) => (
         <div className="customer-info-container">
@@ -301,33 +280,29 @@ const ManageServices: React.FC = () => {
         </div>
       )
     },
-    { 
-      header: 'Price', 
-      key: 'price', 
+    {
+      header: 'Price',
+      key: 'price',
       render: (item: Service) => (
-        <span className="service-price">
-          {formatCurrency(item.price)}
-        </span>
-      ) 
+        <span className="service-price">{formatCurrency(item.price)}</span>
+      )
     },
-    { 
-      header: 'Duration', 
-      key: 'durationMinutes', 
+    {
+      header: 'Duration',
+      key: 'durationMinutes',
       render: (item: Service) => (
-        <span className="service-duration">
-          {item.durationMinutes} min
-        </span>
-      ) 
+        <span className="service-duration">{item.durationMinutes} min</span>
+      )
     },
     {
       header: 'Image',
       key: 'imageUrl',
-      render: (item: Service) => 
+      render: (item: Service) =>
         item.imageUrl ? (
-          <img 
-            src={item.imageUrl} 
-            alt={item.name} 
-            style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px' }} 
+          <img
+            src={item.imageUrl}
+            alt={item.name}
+            style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px' }}
           />
         ) : (
           <span>No Image</span>
@@ -338,8 +313,17 @@ const ManageServices: React.FC = () => {
       key: 'actions',
       render: (item: Service) => (
         <div style={{ display: 'flex', gap: '8px' }}>
-          <Button variant="secondary" size="small" onClick={() => handleEditClick(item)}>Edit</Button>
-          <Button variant="text" size="small" onClick={() => handleDelete(item.id)} style={{ color: '#d32f2f' }}>Delete</Button>
+          <Button variant="secondary" size="small" onClick={() => handleEditClick(item)}>
+            Edit
+          </Button>
+          <Button
+            variant="text"
+            size="small"
+            onClick={() => handleDelete(item.id)}
+            style={{ color: '#d32f2f' }}
+          >
+            Delete
+          </Button>
         </div>
       )
     },
@@ -349,31 +333,27 @@ const ManageServices: React.FC = () => {
     <div className="dashboard-layout-container">
       <div className="dashboard-main-content">
         <DashboardHeader title="Manage Services" />
-        
+
         <div className="dashboard-content-wrapper">
-          <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)', marginTop: '80px'}}>
+          <p className="section-subtitle" style={{ textAlign: 'left', marginBottom: 'var(--spacing-lg)', marginTop: '80px' }}>
             {/* Create, update, and remove services offered by the salon and spa. */}
           </p>
 
-          {successMessage && (
-            <div className="inventory-success-message">
-              {successMessage}
-            </div>
-          )}
-          
+          {successMessage && <div className="inventory-success-message">{successMessage}</div>}
+
           {loading && !isOpen && (
             <div className="dashboard-loading">
               <p>Loading services...</p>
             </div>
           )}
-          
+
           {error && (
             <div className="dashboard-error">
               {error}
               <div className="dashboard-error-actions">
-                <Button 
-                  variant="text" 
-                  size="small" 
+                <Button
+                  variant="text"
+                  size="small"
                   onClick={fetchServices}
                   style={{ fontSize: '14px' }}
                 >
@@ -382,76 +362,65 @@ const ManageServices: React.FC = () => {
               </div>
             </div>
           )}
-          
+
           <div className="recent-bookings-section">
             <div className="recent-bookings-header">
-              <h3 className="recent-bookings-title">
-                Salon & Spa Services
-              </h3>
+              <h3 className="recent-bookings-title">Salon & Spa Services</h3>
               <div style={{ display: 'flex', gap: '10px' }}>
-                <Button 
-                  variant="secondary" 
-                  onClick={fetchServices} 
-                  disabled={loading}
-                  size="small"
-                >
+                <Button variant="secondary" onClick={fetchServices} disabled={loading} size="small">
                   Refresh
                 </Button>
-                <Button 
-                  variant="primary" 
-                  onClick={handleAddClick} 
-                  disabled={loading}
-                  size="small"
-                >
+                <Button variant="primary" onClick={handleAddClick} disabled={loading} size="small">
                   Add New Service
                 </Button>
               </div>
             </div>
 
             {services.length > 0 ? (
-              <Table 
-                data={services} 
-                columns={columns} 
+              <Table
+                data={services}
+                columns={columns}
                 emptyMessage="No services found. Add your first service to get started."
               />
             ) : (
               <div className="dashboard-empty-state">
-                <p className="empty-state-message">
-                  No services found.
-                </p>
-                <p className="empty-state-subtext">
-                  Add your first service to get started.
-                </p>
+                <p className="empty-state-message">No services found.</p>
+                <p className="empty-state-subtext">Add your first service to get started.</p>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      <Modal isOpen={isOpen} onClose={closeModal} title={editingService ? "Edit Service" : "Add New Service"}>
-        <form onSubmit={handleSubmit} className="contact-form" style={{ maxWidth: '500px', margin: '0 auto' }}>
+      <Modal
+        isOpen={isOpen}
+        onClose={closeModal}
+        title={editingService ? "Edit Service" : "Add New Service"}
+      >
+        {/* Responsive modal form wrapper */}
+        <form onSubmit={handleSubmit} className="contact-form service-modal-form">
           <div className="form-group">
             <label htmlFor="service-name">Service Name *</label>
-            <input 
-              type="text" 
-              id="service-name" 
-              name="service_name" 
-              value={formData.service_name} 
-              onChange={handleChange} 
-              required 
+            <input
+              type="text"
+              id="service-name"
+              name="service_name"
+              value={formData.service_name}
+              onChange={handleChange}
+              required
               placeholder="Enter service name"
             />
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="service-category">Category *</label>
-            <select 
-              id="service-category" 
-              name="category" 
-              value={formData.category} 
-              onChange={handleChange} 
+            <select
+              id="service-category"
+              name="category"
+              value={formData.category}
+              onChange={handleChange}
               required
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px' }}
+              className="service-modal-select"
             >
               <option value="facial">Facial</option>
               <option value="massage">Massage</option>
@@ -461,143 +430,113 @@ const ManageServices: React.FC = () => {
               <option value="other">Other</option>
             </select>
           </div>
-          
-          <div className="form-row" style={{ display: 'flex', gap: '15px' }}>
-            <div className="form-group" style={{ flex: 1 }}>
+
+          {/* ✅ Responsive 2-col grid that becomes 1-col on small screens */}
+          <div className="form-grid-2">
+            <div className="form-group">
               <label htmlFor="service-price">Price (₱) *</label>
-              <input 
-                type="number" 
-                id="service-price" 
-                name="price" 
-                value={formData.price} 
-                onChange={handleChange} 
-                required 
-                min="0" 
-                step="0.01" 
+              <input
+                type="number"
+                id="service-price"
+                name="price"
+                value={formData.price}
+                onChange={handleChange}
+                required
+                min="0"
+                step="0.01"
                 placeholder="0.00"
               />
             </div>
-            
-            <div className="form-group" style={{ flex: 1 }}>
+
+            <div className="form-group">
               <label htmlFor="service-duration">Duration (minutes) *</label>
-              <input 
-                type="number" 
-                id="service-duration" 
-                name="duration" 
-                value={formData.duration} 
-                onChange={handleChange} 
-                required 
-                min="15" 
-                step="15" 
+              <input
+                type="number"
+                id="service-duration"
+                name="duration"
+                value={formData.duration}
+                onChange={handleChange}
+                required
+                min="15"
+                step="15"
                 placeholder="60"
               />
             </div>
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="service-description">Description *</label>
-            <textarea 
-              id="service-description" 
-              name="description" 
-              value={formData.description} 
-              onChange={handleChange} 
-              required 
+            <textarea
+              id="service-description"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              required
               rows={4}
               placeholder="Describe the service in detail..."
-              style={{ width: '100%', resize: 'vertical' }}
-            ></textarea>
+              className="service-modal-textarea"
+            />
           </div>
-          
+
           <div className="form-group">
-            <label htmlFor="service-image" style={{ display: 'block', marginBottom: '8px' }}>
+            <label htmlFor="service-image" className="service-modal-label">
               Service Image
             </label>
-            <div style={{ 
-              border: '2px dashed #ddd', 
-              padding: '20px', 
-              textAlign: 'center', 
-              borderRadius: '8px',
-              backgroundColor: '#f9f9f9'
-            }}>
-              <input 
-                type="file" 
-                id="service-image" 
+
+            <div className="service-upload-box">
+              <input
+                type="file"
+                id="service-image"
                 accept="image/*"
                 onChange={handleImageChange}
                 disabled={uploading}
                 style={{ display: 'none' }}
               />
-              <label 
-                htmlFor="service-image" 
-                style={{ 
-                  cursor: uploading ? 'not-allowed' : 'pointer',
-                  display: 'inline-block',
-                  padding: '10px 20px',
-                  backgroundColor: uploading ? '#ccc' : '#007bff',
-                  color: 'white',
-                  borderRadius: '4px',
-                  marginBottom: '10px'
-                }}
+
+              <label
+                htmlFor="service-image"
+                className={`service-upload-button ${uploading ? 'is-disabled' : ''}`}
               >
                 {uploading ? 'Uploading...' : 'Choose File'}
               </label>
-              <div style={{ fontSize: '14px', color: '#666' }}>
+
+              <div className="service-upload-hint">
                 {formData.service_img ? 'File selected' : 'No file chosen'}
               </div>
             </div>
-            
+
             {formData.service_img && (
-              <div style={{ marginTop: '15px', textAlign: 'center' }}>
-                <img 
-                  src={formData.service_img} 
-                  alt="Service preview" 
-                  style={{ 
-                    maxWidth: '200px', 
-                    maxHeight: '150px', 
-                    objectFit: 'cover', 
-                    borderRadius: '8px',
-                    border: '1px solid #ddd'
-                  }} 
+              <div className="service-image-preview">
+                <img
+                  src={formData.service_img}
+                  alt="Service preview"
+                  className="service-image-preview-img"
                 />
-                <p style={{ fontSize: '14px', color: '#666', marginTop: '8px' }}>
-                  Current image preview
-                </p>
+                <p className="service-image-preview-text">Current image preview</p>
               </div>
             )}
           </div>
-          
+
+          {/* Inline error inside modal */}
           {error && (
-            <div style={{ 
-              backgroundColor: '#fee', 
-              border: '1px solid #f5c6cb', 
-              color: '#721c24', 
-              padding: '12px', 
-              borderRadius: '4px',
-              marginBottom: '15px'
-            }}>
+            <div className="service-modal-inline-error">
               {error}
             </div>
           )}
-          
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'flex-end', 
-            gap: '12px', 
-            marginTop: '20px',
-            paddingTop: '15px',
-            borderTop: '1px solid #eee'
-          }}>
-            <Button 
-              variant="secondary" 
-              onClick={closeModal} 
+
+          <div className="service-modal-actions">
+            <Button
+              variant="secondary"
+              onClick={closeModal}
               disabled={loading || uploading}
               type="button"
             >
               Cancel
             </Button>
-            <Button 
-              type="submit" 
-              variant="primary" 
+
+            <Button
+              type="submit"
+              variant="primary"
               disabled={loading || uploading}
               style={{ minWidth: '120px' }}
             >

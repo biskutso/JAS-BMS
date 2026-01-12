@@ -3,6 +3,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import Button from '@components/common/Button';
 import { useAuth } from '@context/AuthContext';
+import { supabase } from '../../supabaseClient';
+
+// await supabase.rpc("log_auth_activity", { p_action: "login" });
+
+// await supabase.rpc("log_auth_activity", { p_action: "logout" });
+// await supabase.auth.signOut();
+
 
 const LoginSignup: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);

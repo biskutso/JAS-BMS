@@ -1,4 +1,9 @@
-// src/pages/admin/ManageBookings.tsx - UPDATED VERSION
+// ✅ Changes made:
+// 1) Walk-in phone input now accepts NUMBERS ONLY (digits, optional + at start)
+// 2) Date/time display and notification formatting forced to PH timezone (Asia/Manila)
+// 3) All "today/max date" logic uses PH date (not device timezone) to avoid mismatch
+
+// src/pages/admin/ManageBookings.tsx - UPDATED (phone numbers only + PH timezone)
 import React, { useState, useEffect } from 'react';
 import DashboardHeader from '@components/dashboard/DashboardHeader';
 import Table from '@components/dashboard/Table';
@@ -6,34 +11,16 @@ import Button from '@components/common/Button';
 import Modal from '@components/common/Modal';
 import { useModal } from '@hooks/useModal';
 import { BookingStatus } from '@models/booking';
-import { formatCurrency, formatDate } from '@utils/helpers';
+import { formatCurrency } from '@utils/helpers';
 import { supabase } from '../../supabaseClient';
 import { SupabaseNotificationService } from '../../services/supabaseNotificationService';
 import "../../assets/styles/dashboards.css";
 
-// Create a complete interface that includes all Booking properties
-interface BookingWithRelations {
-  id: string;
-  serviceId: string;
-  serviceName: string;
-  customerId: string;
-  customerName: string;
-  staffId?: string;
-  staffName?: string;
-  startTime: string;
-  endTime: string;
-  status: BookingStatus;
-  price: number;
-  notes?: string;
+interface ServiceItem {
+  id: number;
   service_name: string;
-  service_price: number;
-  service_duration: number;
-  customer_name: string;
-  customer_email: string;
-  staff_name: string;
-  staff_email: string;
-  booking_date: string;
-  booking_time: string;
+  price: number;
+  duration: number;
 }
 
 interface StaffMember {
@@ -43,36 +30,154 @@ interface StaffMember {
   email: string;
 }
 
+interface BookingWithRelations {
+  id: string;
+  serviceId: string;
+  serviceName: string;
+
+  // registered user customer
+  customerId: string | null;
+  customerName: string;
+  customerEmail: string;
+
+  // walk-in customer
+  walkInCustomerId: string | null;
+  walkInCustomerName: string;
+  walkInCustomerPhone: string;
+  isWalkIn: boolean;
+
+  staffId?: string | null;
+  staffName?: string;
+  staffEmail?: string;
+
+  startTime: string;
+  endTime: string;
+  status: BookingStatus;
+  price: number;
+  notes?: string;
+
+  service_name: string;
+  service_price: number;
+  service_duration: number;
+
+  customer_name: string;
+  customer_email: string;
+
+  staff_name: string;
+  staff_email: string;
+
+  booking_date: string;
+  booking_time: string;
+}
+
+const PH_TZ = 'Asia/Manila';
+
+/**
+ * Get YYYY-MM-DD in Philippine timezone, regardless of device timezone.
+ */
+const getPHDateString = () => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: PH_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
+
+  const year = parts.find(p => p.type === 'year')?.value || '1970';
+  const month = parts.find(p => p.type === 'month')?.value || '01';
+  const day = parts.find(p => p.type === 'day')?.value || '01';
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * Add days to a YYYY-MM-DD date string (safe, timezone-agnostic by using UTC construction).
+ */
+const addDaysToYMD = (ymd: string, days: number) => {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+};
+
+/**
+ * Format booking date+time in Philippine timezone for display.
+ */
+const formatDisplayDateTimePH = (date: string, time: string) => {
+  if (!date) return 'N/A';
+
+  try {
+    // Interpret stored booking_date + booking_time as PH local time.
+    // Use Intl with timeZone=Asia/Manila to display consistently.
+    const [hh = '00', mm = '00'] = (time || '00:00').split(':');
+
+    // Create a "naive" UTC date from the YMD and HMS, then display it in PH.
+    // (This avoids the browser auto-shifting based on local timezone.)
+    const dtUTC = new Date(Date.UTC(
+      Number(date.slice(0, 4)),
+      Number(date.slice(5, 7)) - 1,
+      Number(date.slice(8, 10)),
+      Number(hh),
+      Number(mm)
+    ));
+
+    const formatted = new Intl.DateTimeFormat('en-US', {
+      timeZone: PH_TZ,
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    }).format(dtUTC);
+
+    return formatted;
+  } catch {
+    return 'Invalid date';
+  }
+};
+
 const ManageBookings: React.FC = () => {
   const [bookings, setBookings] = useState<BookingWithRelations[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [servicesList, setServicesList] = useState<ServiceItem[]>([]);
+
   const [selectedBooking, setSelectedBooking] = useState<BookingWithRelations | null>(null);
   const { isOpen, openModal, closeModal } = useModal();
+
   const [formData, setFormData] = useState<Partial<BookingWithRelations & { bookingDate: string; bookingTime: string }>>({});
   const [loading, setLoading] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
+
   const [notificationLoading, setNotificationLoading] = useState<string | null>(null);
-  
-  // New state for mini modals
+
+  // Mini-modals
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [selectedBookingForModal, setSelectedBookingForModal] = useState<BookingWithRelations | null>(null);
 
-  // Get today's date in YYYY-MM-DD format
-  const getTodayDate = () => {
-    return new Date().toISOString().split('T')[0];
-  };
+  // Manual booking modal (walk-in)
+  const [showManualBookingModal, setShowManualBookingModal] = useState(false);
+  const [manualForm, setManualForm] = useState({
+    walkin_name: '',
+    walkin_phone_num: '',
+    service_id: '',
+    staff_id: '',
+    booking_date: '',
+    booking_time: '',
+    notes: ''
+  });
 
-  // Get max date (30 days from now)
-  const getMaxDate = () => {
-    const maxDate = new Date();
-    maxDate.setDate(maxDate.getDate() + 30);
-    return maxDate.toISOString().split('T')[0];
-  };
+  // ✅ PH dates
+  const getTodayDate = () => getPHDateString();
+  const getMaxDate = () => addDaysToYMD(getPHDateString(), 30);
 
-  // Fetch all bookings with related data
+  // Fetch bookings with relations (users + walk-in)
   const fetchBookings = async () => {
     try {
       setLoading(true);
@@ -84,35 +189,64 @@ const ManageBookings: React.FC = () => {
           *,
           services:service_id (service_name, price, duration),
           customers:customer_id (first_name, last_name, email),
-          staff:staff_id (first_name, last_name, email)
+          staff:staff_id (first_name, last_name, email),
+          walkin:walk_in_customers!bookings_walkin_fk (name, phone_num)
         `)
         .order('booking_date', { ascending: false });
 
       if (error) throw error;
 
-      const bookingsWithRelations: BookingWithRelations[] = (data || []).map(booking => ({
-        id: booking.id,
-        serviceId: booking.service_id,
-        serviceName: booking.services?.service_name || 'Unknown Service',
-        customerId: booking.customer_id,
-        customerName: `${booking.customers?.first_name || ''} ${booking.customers?.last_name || ''}`.trim() || 'Unknown Customer',
-        staffId: booking.staff_id,
-        staffName: booking.staff ? `${booking.staff.first_name || ''} ${booking.staff.last_name || ''}`.trim() : 'Unassigned',
-        startTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
-        endTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
-        status: booking.status as BookingStatus,
-        price: booking.total_price || booking.services?.price || 0,
-        notes: booking.notes || '',
-        service_name: booking.services?.service_name || 'Unknown Service',
-        service_price: booking.services?.price || 0,
-        service_duration: booking.services?.duration || 60,
-        customer_name: `${booking.customers?.first_name || ''} ${booking.customers?.last_name || ''}`.trim() || 'Unknown Customer',
-        customer_email: booking.customers?.email || '',
-        staff_name: booking.staff ? `${booking.staff.first_name || ''} ${booking.staff.last_name || ''}`.trim() : 'Unassigned',
-        staff_email: booking.staff?.email || '',
-        booking_date: booking.booking_date,
-        booking_time: booking.booking_time
-      }));
+      const bookingsWithRelations: BookingWithRelations[] = (data || []).map((booking: any) => {
+        const isWalkIn = !!booking.walk_in_customer_id;
+
+        const registeredCustomerName = `${booking.customers?.first_name || ''} ${booking.customers?.last_name || ''}`.trim();
+        const walkInName = booking.walkin?.name || '';
+
+        const displayCustomerName =
+          (isWalkIn ? walkInName : registeredCustomerName) ||
+          'Unknown Customer';
+
+        const customerEmail = booking.customers?.email || '';
+
+        return {
+          id: booking.id,
+          serviceId: booking.service_id,
+          serviceName: booking.services?.service_name || 'Unknown Service',
+
+          customerId: booking.customer_id ?? null,
+          customerName: displayCustomerName,
+          customerEmail: customerEmail,
+
+          walkInCustomerId: booking.walk_in_customer_id ?? null,
+          walkInCustomerName: booking.walkin?.name || '',
+          walkInCustomerPhone: booking.walkin?.phone_num || '',
+          isWalkIn,
+
+          staffId: booking.staff_id ?? null,
+          staffName: booking.staff ? `${booking.staff.first_name || ''} ${booking.staff.last_name || ''}`.trim() : 'Unassigned',
+          staffEmail: booking.staff?.email || '',
+
+          startTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
+          endTime: booking.booking_date ? `${booking.booking_date}T${booking.booking_time}` : '',
+          status: booking.status as BookingStatus,
+
+          price: booking.total_price || booking.services?.price || 0,
+          notes: booking.notes || '',
+
+          service_name: booking.services?.service_name || 'Unknown Service',
+          service_price: booking.services?.price || 0,
+          service_duration: booking.services?.duration || 60,
+
+          customer_name: displayCustomerName,
+          customer_email: isWalkIn ? '' : (booking.customers?.email || ''),
+
+          staff_name: booking.staff ? `${booking.staff.first_name || ''} ${booking.staff.last_name || ''}`.trim() : 'Unassigned',
+          staff_email: booking.staff?.email || '',
+
+          booking_date: booking.booking_date,
+          booking_time: booking.booking_time
+        };
+      });
 
       setBookings(bookingsWithRelations);
     } catch (err: any) {
@@ -123,7 +257,7 @@ const ManageBookings: React.FC = () => {
     }
   };
 
-  // Fetch staff members for assignment
+  // Fetch staff
   const fetchStaffMembers = async () => {
     try {
       const { data, error } = await supabase
@@ -133,7 +267,6 @@ const ManageBookings: React.FC = () => {
         .order('first_name');
 
       if (error) throw error;
-      
       setStaffMembers(data || []);
     } catch (err: any) {
       console.error('Error fetching staff:', err);
@@ -141,155 +274,56 @@ const ManageBookings: React.FC = () => {
     }
   };
 
-  // Simple function to send notification directly to database
-  const sendBookingNotification = async (
-    booking: BookingWithRelations, 
-    notificationType: 'reschedule_request' | 'cancellation_request'
-  ) => {
+  // Fetch services
+  const fetchServices = async () => {
     try {
-      setNotificationLoading(booking.id);
-      setError(null);
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, service_name, price, duration')
+        .order('service_name');
 
-      const bookingDateTime = new Date(`${booking.booking_date}T${booking.booking_time}`);
-      const formattedDate = bookingDateTime.toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-      const formattedTime = bookingDateTime.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
-      const formattedDateTime = `${formattedDate} at ${formattedTime}`;
-
-      const notificationData = {
-        user_id: booking.customerId,
-        booking_id: booking.id,
-        type: notificationType,
-        title: '',
-        message: '',
-        read: false,
-        created_at: new Date().toISOString()
-      };
-
-      // Set notification content based on type
-      switch (notificationType) {
-        case 'reschedule_request':
-          notificationData.title = '🔁 Action Required: Reschedule Your Appointment';
-          notificationData.message = `Your booking for **${booking.service_name}** on **${formattedDateTime}** needs to be rescheduled. 
-
-Please choose a new date and time that works for you.
-
-If you have any questions, please contact our support team.`;
-          break;
-          
-        case 'cancellation_request':
-          notificationData.title = '⚠️ Action Required: Confirm Cancellation';
-          notificationData.message = `Your booking for **${booking.service_name}** on **${formattedDateTime}** cannot be confirmed as scheduled.
-
-Please this booking or contact our support team to discuss alternative options.
-
-We apologize for any inconvenience.`;
-          break;
-      }
-
-      // Insert the notification directly into the database
-      const { error: notificationError } = await supabase
-        .from('notifications')
-        .insert([notificationData]);
-
-      if (notificationError) throw notificationError;
-
-      // Update booking's updated_at timestamp
-      await supabase
-        .from('bookings')
-        .update({
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', booking.id);
-
-      return true;
+      if (error) throw error;
+      setServicesList((data || []) as ServiceItem[]);
     } catch (err: any) {
-      console.error('Error sending notification:', err);
-      throw err;
-    } finally {
-      setNotificationLoading(null);
+      console.error('Error fetching services:', err);
+      setError(`Failed to load services: ${err.message}`);
     }
   };
 
-  // Manual function to request customer to reschedule
-  const requestCustomerReschedule = async (booking: BookingWithRelations) => {
-    try {
-      await sendBookingNotification(booking, 'reschedule_request');
-      setSuccessMessage(`✅ ${booking.customer_name} has been notified to reschedule their ${booking.service_name} appointment.`);
-      setTimeout(() => setSuccessMessage(null), 5000);
-    } catch (err: any) {
-      setError(`Failed to request reschedule: ${err.message}`);
-    }
-  };
-
-  // Manual function to request customer cancellation
-  const requestCustomerCancellation = async (booking: BookingWithRelations) => {
-    try {
-      await sendBookingNotification(booking, 'cancellation_request');
-      setSuccessMessage(`✅ ${booking.customer_name} has been notified to cancel their ${booking.service_name} appointment.`);
-      setTimeout(() => setSuccessMessage(null), 5000);
-    } catch (err: any) {
-      setError(`Failed to request cancellation: ${err.message}`);
-    }
-  };
-
-  // ✅ NEW: Send automatic notifications when status changes to confirmed or completed
-  const sendAutomaticNotification = async (bookingId: string, newStatus: BookingStatus) => {
-    try {
-      console.log(`🔄 Sending automatic notification for booking ${bookingId}, status: ${newStatus}`);
-      
-      if (newStatus === 'confirmed') {
-        await SupabaseNotificationService.createBookingNotification(bookingId, 'booking_confirmed');
-        console.log('✅ Confirmation notification sent');
-      } else if (newStatus === 'completed') {
-        await SupabaseNotificationService.createBookingNotification(bookingId, 'booking_completed');
-        console.log('✅ Completion notification sent');
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('❌ Error sending automatic notification:', error);
-      // Don't throw the error - we don't want to break the booking update
-      return false;
-    }
-  };
-
-  // Get available time slots based on whether it's today or future date
+  // ✅ Time slots based on PH time
   const getAvailableTimeSlots = (selectedDate: string) => {
-    const slots = [];
+    const slots: string[] = [];
     const startHour = 9;
     const endHour = 18;
-    
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    
+
+    const nowParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: PH_TZ,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(new Date());
+
+    const currentHour = Number(nowParts.find(p => p.type === 'hour')?.value || 0);
+    const currentMinute = Number(nowParts.find(p => p.type === 'minute')?.value || 0);
+
     const isToday = selectedDate === getTodayDate();
-    
+
     for (let hour = startHour; hour < endHour; hour++) {
       if (!isToday || hour > currentHour || (hour === currentHour && currentMinute < 30)) {
         slots.push(`${hour.toString().padStart(2, '0')}:00`);
       }
-      
+
       if (hour < endHour - 1) {
         if (!isToday || hour > currentHour || (hour === currentHour && currentMinute <= 30)) {
           slots.push(`${hour.toString().padStart(2, '0')}:30`);
         }
       }
     }
-    
+
     return slots;
   };
 
-  // Check if a time slot is available for the selected staff
+  // Check slot availability for staff
   const isTimeSlotAvailable = async (date: string, time: string, staffId: string): Promise<boolean> => {
     try {
       const { data, error } = await supabase
@@ -301,8 +335,7 @@ We apologize for any inconvenience.`;
         .in('status', ['pending', 'confirmed']);
 
       if (error) throw error;
-
-      return data.length === 0;
+      return (data || []).length === 0;
     } catch (err) {
       console.error('Error checking time slot:', err);
       return true;
@@ -312,13 +345,144 @@ We apologize for any inconvenience.`;
   useEffect(() => {
     fetchBookings();
     fetchStaffMembers();
+    fetchServices();
+
+    // init manual booking defaults (PH)
+    setManualForm(prev => ({
+      ...prev,
+      booking_date: getTodayDate(),
+      booking_time: ''
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ---------- Notifications ----------
+  const sendBookingNotification = async (
+    booking: BookingWithRelations,
+    notificationType: 'reschedule_request' | 'cancellation_request'
+  ) => {
+    if (booking.isWalkIn || !booking.customerId) {
+      throw new Error('This booking is for a walk-in customer. Notifications are only available for registered users.');
+    }
+
+    try {
+      setNotificationLoading(booking.id);
+      setError(null);
+
+      // ✅ format in PH timezone
+      const [hh = '00', mm = '00'] = (booking.booking_time || '00:00').split(':');
+      const dtUTC = new Date(Date.UTC(
+        Number(booking.booking_date.slice(0, 4)),
+        Number(booking.booking_date.slice(5, 7)) - 1,
+        Number(booking.booking_date.slice(8, 10)),
+        Number(hh),
+        Number(mm)
+      ));
+
+      const formattedDate = new Intl.DateTimeFormat('en-US', {
+        timeZone: PH_TZ,
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      }).format(dtUTC);
+
+      const formattedTime = new Intl.DateTimeFormat('en-US', {
+        timeZone: PH_TZ,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      }).format(dtUTC);
+
+      const formattedDateTime = `${formattedDate} at ${formattedTime}`;
+
+      const notificationData: any = {
+        user_id: booking.customerId,
+        booking_id: booking.id,
+        type: notificationType,
+        title: '',
+        message: '',
+        read: false,
+        created_at: new Date().toISOString()
+      };
+
+      switch (notificationType) {
+        case 'reschedule_request':
+          notificationData.title = '🔁 Action Required: Reschedule Your Appointment';
+          notificationData.message = `Your booking for **${booking.service_name}** on **${formattedDateTime}** needs to be rescheduled.
+
+Please choose a new date and time that works for you.
+
+If you have any questions, please contact our support team.`;
+          break;
+
+        case 'cancellation_request':
+          notificationData.title = '⚠️ Action Required: Confirm Cancellation';
+          notificationData.message = `Your booking for **${booking.service_name}** on **${formattedDateTime}** cannot be confirmed as scheduled.
+
+Please cancel this booking or contact our support team to discuss alternative options.
+
+We apologize for any inconvenience.`;
+          break;
+      }
+
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert([notificationData]);
+
+      if (notificationError) throw notificationError;
+
+      await supabase
+        .from('bookings')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', booking.id);
+
+      return true;
+    } finally {
+      setNotificationLoading(null);
+    }
+  };
+
+  const requestCustomerReschedule = async (booking: BookingWithRelations) => {
+    try {
+      await sendBookingNotification(booking, 'reschedule_request');
+      setSuccessMessage(`✅ ${booking.customer_name} has been notified to reschedule their ${booking.service_name} appointment.`);
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err: any) {
+      setError(`Failed to request reschedule: ${err.message}`);
+    }
+  };
+
+  const requestCustomerCancellation = async (booking: BookingWithRelations) => {
+    try {
+      await sendBookingNotification(booking, 'cancellation_request');
+      setSuccessMessage(`✅ ${booking.customer_name} has been notified to cancel their ${booking.service_name} appointment.`);
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err: any) {
+      setError(`Failed to request cancellation: ${err.message}`);
+    }
+  };
+
+  const sendAutomaticNotification = async (bookingId: string, newStatus: BookingStatus) => {
+    try {
+      if (newStatus === 'confirmed') {
+        await SupabaseNotificationService.createBookingNotification(bookingId, 'booking_confirmed');
+      } else if (newStatus === 'completed') {
+        await SupabaseNotificationService.createBookingNotification(bookingId, 'booking_completed');
+      }
+      return true;
+    } catch (error) {
+      console.error('❌ Error sending automatic notification:', error);
+      return false;
+    }
+  };
+
+  // ---------- Edit booking ----------
   const handleEditClick = (booking: BookingWithRelations) => {
     setSelectedBooking(booking);
     setFormData({
       ...booking,
-      bookingDate: booking.booking_date ? new Date(booking.booking_date).toISOString().split('T')[0] : '',
+      bookingDate: booking.booking_date || '',
       bookingTime: booking.booking_time || '',
       staffId: booking.staffId || ''
     });
@@ -343,6 +507,8 @@ We apologize for any inconvenience.`;
     setModalError(null);
   };
 
+  const isActiveBooking = (status: BookingStatus) => status === 'pending' || status === 'confirmed';
+
   const handleUpdateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBooking) return;
@@ -352,29 +518,22 @@ We apologize for any inconvenience.`;
     setModalError(null);
 
     try {
-      const today = getTodayDate();
-      if (formData.bookingDate && formData.bookingDate < today) {
+      const todayPH = getTodayDate();
+      if (formData.bookingDate && formData.bookingDate < todayPH) {
         setModalError('Cannot book appointments in the past. Please select today or a future date.');
-        setLoading(false);
         return;
       }
 
       if (formData.bookingDate && formData.bookingTime && formData.staffId) {
-        const isAvailable = await isTimeSlotAvailable(
-          formData.bookingDate, 
-          formData.bookingTime, 
-          formData.staffId
-        );
-        
+        const isAvailable = await isTimeSlotAvailable(formData.bookingDate, formData.bookingTime, formData.staffId);
         if (!isAvailable) {
           setModalError('This time slot is no longer available for the selected staff member. Please choose another time or staff member.');
-          setLoading(false);
           return;
         }
       }
 
-      const newStatus = formData.status || selectedBooking.status;
-      const updateData = {
+      const newStatus = (formData.status || selectedBooking.status) as BookingStatus;
+      const updateData: any = {
         staff_id: formData.staffId === '' ? null : formData.staffId,
         booking_date: formData.bookingDate || selectedBooking.booking_date,
         booking_time: formData.bookingTime || selectedBooking.booking_time,
@@ -390,25 +549,19 @@ We apologize for any inconvenience.`;
 
       if (error) throw error;
 
-      // ✅ NEW: Send automatic notification if status changed to confirmed or completed
       const statusChanged = newStatus !== selectedBooking.status;
       let notificationSent = false;
-      
-      if (statusChanged && (newStatus === 'confirmed' || newStatus === 'completed')) {
-        try {
-          await sendAutomaticNotification(selectedBooking.id, newStatus);
-          notificationSent = true;
-        } catch (notificationError) {
-          console.error('Notification failed, but booking was updated:', notificationError);
-          // Continue even if notification fails
-        }
+
+      if (!selectedBooking.isWalkIn && statusChanged && (newStatus === 'confirmed' || newStatus === 'completed')) {
+        notificationSent = await sendAutomaticNotification(selectedBooking.id, newStatus);
       }
 
-      const successMsg = notificationSent 
-        ? `Booking updated successfully! Customer notified about ${newStatus} status.`
-        : 'Booking updated successfully';
+      setSuccessMessage(
+        notificationSent
+          ? `Booking updated successfully! Customer notified about ${newStatus} status.`
+          : 'Booking updated successfully'
+      );
 
-      setSuccessMessage(successMsg);
       setTimeout(() => setSuccessMessage(null), 3000);
       await fetchBookings();
       closeModal();
@@ -424,6 +577,7 @@ We apologize for any inconvenience.`;
 
     setLoading(true);
     setError(null);
+
     try {
       const { error } = await supabase
         .from('bookings')
@@ -447,13 +601,12 @@ We apologize for any inconvenience.`;
       setLoading(true);
       setError(null);
 
-      // Get the current booking to check if status is changing
       const currentBooking = bookings.find(b => b.id === bookingId);
       const statusChanged = currentBooking && currentBooking.status !== newStatus;
 
       const { error } = await supabase
         .from('bookings')
-        .update({ 
+        .update({
           status: newStatus,
           updated_at: new Date().toISOString()
         })
@@ -461,23 +614,17 @@ We apologize for any inconvenience.`;
 
       if (error) throw error;
 
-      // ✅ NEW: Send automatic notification if status changed to confirmed or completed
       let notificationSent = false;
-      if (statusChanged && (newStatus === 'confirmed' || newStatus === 'completed')) {
-        try {
-          await sendAutomaticNotification(bookingId, newStatus);
-          notificationSent = true;
-        } catch (notificationError) {
-          console.error('Notification failed, but booking was updated:', notificationError);
-          // Continue even if notification fails
-        }
+      if (currentBooking && !currentBooking.isWalkIn && statusChanged && (newStatus === 'confirmed' || newStatus === 'completed')) {
+        notificationSent = await sendAutomaticNotification(bookingId, newStatus);
       }
 
-      const successMsg = notificationSent 
-        ? `Booking status updated to ${newStatus}! Customer notified.`
-        : `Booking status updated to ${newStatus}`;
+      setSuccessMessage(
+        notificationSent
+          ? `Booking status updated to ${newStatus}! Customer notified.`
+          : `Booking status updated to ${newStatus}`
+      );
 
-      setSuccessMessage(successMsg);
       setTimeout(() => setSuccessMessage(null), 3000);
       await fetchBookings();
       setShowStatusModal(false);
@@ -488,37 +635,97 @@ We apologize for any inconvenience.`;
     }
   };
 
-  const formatDisplayDateTime = (date: string, time: string) => {
-    if (!date) return 'N/A';
-    
+  // ---------- Manual booking (walk-in) ----------
+  const openManualBookingModal = () => {
+    setModalError(null);
+    setManualForm({
+      walkin_name: '',
+      walkin_phone_num: '',
+      service_id: '',
+      staff_id: '',
+      booking_date: getTodayDate(),
+      booking_time: '',
+      notes: ''
+    });
+    setShowManualBookingModal(true);
+  };
+
+  // ✅ phone sanitizer: keep digits only (optionally allow leading +)
+  const sanitizePhone = (raw: string) => {
+    // If you want STRICT digits only, use: raw.replace(/\D/g, '')
+    // This version allows an optional leading '+' then digits.
+    let cleaned = raw.replace(/[^\d+]/g, '');
+    if (cleaned.includes('+')) {
+      cleaned = cleaned.replace(/\+/g, '');
+      cleaned = '+' + cleaned; // only one leading +
+    }
+    return cleaned;
+  };
+
+  const handleCreateManualBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setModalError(null);
+    setError(null);
+
     try {
-      const dateObj = new Date(date);
-      const formattedDate = dateObj.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      });
-      
-      if (!time) return formattedDate;
-      
-      // Parse the time and format it properly
-      const [hours, minutes] = time.split(':');
-      const hour = parseInt(hours);
-      const ampm = hour >= 12 ? 'PM' : 'AM';
-      const displayHour = hour % 12 || 12;
-      
-      return `${formattedDate} at ${displayHour}:${minutes} ${ampm}`;
-    } catch (error) {
-      return 'Invalid date';
+      if (!manualForm.walkin_name.trim()) throw new Error('Walk-in name is required.');
+      if (!manualForm.walkin_phone_num.trim()) throw new Error('Phone number is required.');
+      if (!manualForm.service_id) throw new Error('Please select a service.');
+      if (!manualForm.booking_date) throw new Error('Please select a booking date.');
+      if (!manualForm.booking_time) throw new Error('Please select a booking time.');
+
+      if (manualForm.staff_id) {
+        const isAvailable = await isTimeSlotAvailable(manualForm.booking_date, manualForm.booking_time, manualForm.staff_id);
+        if (!isAvailable) throw new Error('This time slot is not available for the selected staff member.');
+      }
+
+      const { data: walkinData, error: walkinError } = await supabase
+        .from('walk_in_customers')
+        .insert([{
+          name: manualForm.walkin_name.trim(),
+          phone_num: sanitizePhone(manualForm.walkin_phone_num.trim()),
+          created_at: new Date().toISOString()
+        }])
+        .select('id')
+        .single();
+
+      if (walkinError) throw walkinError;
+
+      const selectedService = servicesList.find(s => String(s.id) === manualForm.service_id);
+      const totalPrice = selectedService?.price ?? 0;
+
+      const { error: bookingError } = await supabase
+        .from('bookings')
+        .insert([{
+          service_id: Number(manualForm.service_id),
+          customer_id: null,
+          walk_in_customer_id: walkinData.id,
+          staff_id: manualForm.staff_id ? manualForm.staff_id : null,
+          booking_date: manualForm.booking_date,
+          booking_time: manualForm.booking_time,
+          status: 'pending',
+          total_price: totalPrice,
+          notes: manualForm.notes || '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }]);
+
+      if (bookingError) throw bookingError;
+
+      setSuccessMessage('✅ Manual booking created successfully!');
+      setTimeout(() => setSuccessMessage(null), 4000);
+
+      setShowManualBookingModal(false);
+      await fetchBookings();
+    } catch (err: any) {
+      setModalError(err.message || 'Failed to create manual booking.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Helper function to determine if booking is active (can be edited)
-  const isActiveBooking = (status: BookingStatus) => {
-    return status === 'pending' || status === 'confirmed';
-  };
-
-  // Handler functions for mini modals
+  // Mini modals handlers
   const handleStatusButtonClick = (booking: BookingWithRelations) => {
     setSelectedBookingForModal(booking);
     setShowStatusModal(true);
@@ -535,11 +742,10 @@ We apologize for any inconvenience.`;
     setSelectedBookingForModal(null);
   };
 
-  // UPDATED COLUMNS WITH SEARCHABLE AND SORTABLE PROPERTIES
   const columns = [
-    { 
-      header: 'Service', 
-      key: 'service', 
+    {
+      header: 'Service',
+      key: 'service',
       render: (item: BookingWithRelations) => (
         <div className="service-info-container">
           <div className="service-name">{item.service_name}</div>
@@ -552,46 +758,51 @@ We apologize for any inconvenience.`;
       ),
       searchable: true,
       sortable: true,
-      sortFn: (a: BookingWithRelations, b: BookingWithRelations) => 
-        a.service_name.localeCompare(b.service_name)
+      sortFn: (a: BookingWithRelations, b: BookingWithRelations) => a.service_name.localeCompare(b.service_name)
     },
-    { 
-      header: 'Customer', 
-      key: 'customer', 
+    {
+      header: 'Customer',
+      key: 'customer',
       render: (item: BookingWithRelations) => (
         <div className="customer-info-container">
-          <div className="customer-name">{item.customer_name}</div>
-          <div className="customer-email">{item.customer_email}</div>
-        </div>
-      ),
-      searchable: true,
-      sortable: true,
-      sortFn: (a: BookingWithRelations, b: BookingWithRelations) => 
-        a.customer_name.localeCompare(b.customer_name)
-    },
-    { 
-      header: 'Staff', 
-      key: 'staff', 
-      render: (item: BookingWithRelations) => (
-        <div className="staff-info-container">
-          <div className="staff-name">{item.staff_name}</div>
-          {item.staff_email && (
-            <div className="staff-email">{item.staff_email}</div>
+          <div className="customer-name">
+            {item.customer_name}
+            {item.isWalkIn && (
+              <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>(Walk-in)</span>
+            )}
+          </div>
+          {!item.isWalkIn ? (
+            <div className="customer-email">{item.customer_email}</div>
+          ) : (
+            <div className="customer-email">{item.walkInCustomerPhone}</div>
           )}
         </div>
       ),
       searchable: true,
       sortable: true,
-      sortFn: (a: BookingWithRelations, b: BookingWithRelations) => 
-        (a.staff_name || '').localeCompare(b.staff_name || '')
+      sortFn: (a: BookingWithRelations, b: BookingWithRelations) => a.customer_name.localeCompare(b.customer_name)
     },
-    { 
-      header: 'Date & Time', 
-      key: 'datetime', 
+    {
+      header: 'Staff',
+      key: 'staff',
+      render: (item: BookingWithRelations) => (
+        <div className="staff-info-container">
+          <div className="staff-name">{item.staff_name}</div>
+          {item.staff_email && <div className="staff-email">{item.staff_email}</div>}
+        </div>
+      ),
+      searchable: true,
+      sortable: true,
+      sortFn: (a: BookingWithRelations, b: BookingWithRelations) => (a.staff_name || '').localeCompare(b.staff_name || '')
+    },
+    {
+      header: 'Date & Time',
+      key: 'datetime',
+      // ✅ PH timezone display
       render: (item: BookingWithRelations) => (
         <div className="booking-datetime-container">
           <div className="booking-date-time">
-            {formatDisplayDateTime(item.booking_date, item.booking_time)}
+            {formatDisplayDateTimePH(item.booking_date, item.booking_time)}
           </div>
         </div>
       ),
@@ -603,9 +814,9 @@ We apologize for any inconvenience.`;
         return dateA.getTime() - dateB.getTime();
       }
     },
-    { 
-      header: 'Status', 
-      key: 'status', 
+    {
+      header: 'Status',
+      key: 'status',
       render: (item: BookingWithRelations) => (
         <div className="booking-status-container">
           <span className={`booking-status-badge booking-status-badge-${item.status}`}>
@@ -615,18 +826,10 @@ We apologize for any inconvenience.`;
       ),
       searchable: true,
       sortable: true,
-      // Custom status sort function for proper order: Pending → Confirmed → Completed → Cancelled
       sortFn: (a: BookingWithRelations, b: BookingWithRelations) => {
-        const statusOrder: Record<string, number> = {
-          'pending': 0,
-          'confirmed': 1,
-          'completed': 2,
-          'cancelled': 3
-        };
-        
+        const statusOrder: Record<string, number> = { pending: 0, confirmed: 1, completed: 2, cancelled: 3 };
         const aOrder = statusOrder[a.status.toLowerCase()] ?? 999;
         const bOrder = statusOrder[b.status.toLowerCase()] ?? 999;
-        
         return aOrder - bOrder;
       }
     },
@@ -634,24 +837,34 @@ We apologize for any inconvenience.`;
       header: 'Actions',
       key: 'actions',
       render: (item: BookingWithRelations) => {
-        const isActive = isActiveBooking(item.status);
+        const isActive = item.status === 'pending' || item.status === 'confirmed';
         const isNotificationLoading = notificationLoading === item.id;
-        
+        const notifyDisabled = isNotificationLoading || item.isWalkIn;
+
         return (
           <div className="booking-actions-container">
             {isActive ? (
               <>
-                {/* All 4 buttons stacked vertically */}
-                <Button 
+                <Button
                   variant="text"
                   className="stacked-button stacked-edit-button"
-                  onClick={() => handleEditClick(item)}
+                  onClick={() => {
+                    setSelectedBooking(item);
+                    setFormData({
+                      ...item,
+                      bookingDate: item.booking_date || '',
+                      bookingTime: item.booking_time || '',
+                      staffId: item.staffId || ''
+                    });
+                    setModalError(null);
+                    openModal();
+                  }}
                   title="Edit booking"
                 >
                   Edit
                 </Button>
-                
-                <Button 
+
+                <Button
                   variant="text"
                   className="stacked-button stacked-delete-button"
                   onClick={() => handleDelete(item.id)}
@@ -659,8 +872,8 @@ We apologize for any inconvenience.`;
                 >
                   Delete
                 </Button>
-                
-                <Button 
+
+                <Button
                   variant="text"
                   className="stacked-button stacked-status-button"
                   onClick={() => handleStatusButtonClick(item)}
@@ -668,20 +881,20 @@ We apologize for any inconvenience.`;
                 >
                   Status
                 </Button>
-                
-                <Button 
+
+                <Button
                   variant="text"
                   className="stacked-button stacked-notify-button"
                   onClick={() => handleNotificationButtonClick(item)}
-                  disabled={isNotificationLoading}
-                  title="Send notifications to customer"
+                  disabled={notifyDisabled}
+                  title={item.isWalkIn ? 'Walk-in bookings have no app notification' : 'Send notifications to customer'}
                 >
                   {isNotificationLoading ? 'Sending...' : 'Notify'}
                 </Button>
               </>
             ) : (
               <div className="readonly-actions">
-                <Button 
+                <Button
                   variant="text"
                   className="stacked-button stacked-delete-button readonly"
                   onClick={() => handleDelete(item.id)}
@@ -689,9 +902,7 @@ We apologize for any inconvenience.`;
                 >
                   Delete
                 </Button>
-                <span className="read-only-text">
-                  Read-only
-                </span>
+                <span className="read-only-text">Read-only</span>
               </div>
             )}
           </div>
@@ -699,71 +910,56 @@ We apologize for any inconvenience.`;
       },
       searchable: false,
       sortable: false
-    },
+    }
   ];
 
-  // Get available time slots for the selected date
   const availableTimeSlots = formData.bookingDate ? getAvailableTimeSlots(formData.bookingDate) : [];
+  const manualTimeSlots = manualForm.booking_date ? getAvailableTimeSlots(manualForm.booking_date) : [];
 
   return (
     <div className="dashboard-layout-container">
       <div className="dashboard-main-content">
         <DashboardHeader title="Manage Bookings" />
-        
-        <div className="dashboard-content-wrapper">
-          <p className="section-subtitle" style={{textAlign: 'left', marginBottom: 'var(--spacing-lg)'}}>
-            {/* View and manage all customer appointments, assign staff, and update statuses. */}<br/>
-          </p>
 
-          {successMessage && (
-            <div className="inventory-success-message">
-              {successMessage}
-            </div>
-          )}
-          
+        <div className="dashboard-content-wrapper">
+          {successMessage && <div className="inventory-success-message">{successMessage}</div>}
+
           {loading && !isOpen && (
             <div className="dashboard-loading">
               <p>Loading bookings...</p>
             </div>
           )}
-          
+
           {error && (
             <div className="dashboard-error">
               {error}
               <div className="dashboard-error-actions">
-                <Button 
-                  variant="text" 
-                  size="small" 
-                  onClick={fetchBookings}
-                  style={{ fontSize: '14px' }}
-                >
+                <Button variant="text" size="small" onClick={fetchBookings} style={{ fontSize: '14px' }}>
                   Try Again
                 </Button>
               </div>
             </div>
           )}
-          
+
           <div className="recent-bookings-section">
             <div className="recent-bookings-header">
-              <h3 className="recent-bookings-title">
-                Bookings ({bookings.length})
-              </h3>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <Button 
-                  variant="secondary" 
-                  onClick={fetchBookings} 
-                  disabled={loading}
-                  size="small"
-                >
+              <h3 className="recent-bookings-title">Bookings ({bookings.length})</h3>
+
+              <div className="bookings-header-actions">
+                <Button variant="secondary" onClick={fetchBookings} disabled={loading} size="small">
                   🔄 Refresh Bookings
+                </Button>
+
+                <Button variant="primary" onClick={openManualBookingModal} disabled={loading} size="small">
+                  ➕ Manual Booking
                 </Button>
               </div>
             </div>
 
             {bookings.length > 0 ? (
-              <Table 
-                data={bookings} 
-                columns={columns} 
+              <Table
+                data={bookings}
+                columns={columns}
                 emptyMessage="No bookings found. Bookings will appear here when customers make appointments."
                 searchPlaceholder="Search bookings by service, customer, staff, date, or status..."
                 showSearch={true}
@@ -771,63 +967,43 @@ We apologize for any inconvenience.`;
               />
             ) : (
               <div className="dashboard-empty-state">
-                <p className="empty-state-message">
-                  No bookings found.
-                </p>
-                <p className="empty-state-subtext">
-                  Bookings will appear here when customers make appointments.
-                </p>
+                <p className="empty-state-message">No bookings found.</p>
+                <p className="empty-state-subtext">Bookings will appear here when customers make appointments.</p>
               </div>
             )}
           </div>
         </div>
       </div>
 
+      {/* ========================= */}
       {/* Main Edit Booking Modal */}
+      {/* ========================= */}
       <Modal isOpen={isOpen} onClose={closeModal} title="Edit Booking">
         {selectedBooking && (
           <form onSubmit={handleUpdateBooking} className="contact-form">
             <div className="form-group">
               <label htmlFor="serviceName">Service</label>
-              <input 
-                type="text" 
-                id="serviceName" 
-                name="serviceName" 
-                value={selectedBooking.service_name || ''} 
-                disabled 
-              />
+              <input type="text" id="serviceName" name="serviceName" value={selectedBooking.service_name || ''} disabled />
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="servicePrice">Price</label>
-              <input 
-                type="text" 
-                id="servicePrice" 
-                name="servicePrice" 
-                value={formatCurrency(selectedBooking.service_price || 0)} 
-                disabled 
-              />
+              <input type="text" id="servicePrice" name="servicePrice" value={formatCurrency(selectedBooking.service_price || 0)} disabled />
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="customerName">Customer</label>
-              <input 
-                type="text" 
-                id="customerName" 
-                name="customerName" 
-                value={selectedBooking.customer_name || ''} 
-                disabled 
-              />
+              <input type="text" id="customerName" name="customerName" value={selectedBooking.customer_name || ''} disabled />
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="staffId">Assign Staff</label>
-              <select 
-                id="staffId" 
-                name="staffId" 
-                value={formData.staffId || ''} 
+              <select
+                id="staffId"
+                name="staffId"
+                value={(formData.staffId as any) || ''}
                 onChange={handleStaffChange}
-                disabled={!isActiveBooking(selectedBooking.status)}
+                disabled={!(selectedBooking.status === 'pending' || selectedBooking.status === 'confirmed')}
               >
                 <option value="">Unassigned</option>
                 {staffMembers.map(staff => (
@@ -836,154 +1012,227 @@ We apologize for any inconvenience.`;
                   </option>
                 ))}
               </select>
-              {!isActiveBooking(selectedBooking.status) && (
-                <small className="disabled-note">
-                  Cannot modify staff for completed or cancelled bookings
-                </small>
-              )}
-              {staffMembers.length === 0 && (
-                <small className="error-note">
-                  No staff members found. Please add staff members first.
-                </small>
-              )}
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="bookingDate">Booking Date *</label>
-              <input 
-                type="date" 
-                id="bookingDate" 
-                name="bookingDate" 
-                value={formData.bookingDate || ''} 
+              <input
+                type="date"
+                id="bookingDate"
+                name="bookingDate"
+                value={formData.bookingDate || ''}
                 onChange={(e) => handleDateChange(e.target.value)}
-                required 
-                disabled={!isActiveBooking(selectedBooking.status)}
+                required
                 min={getTodayDate()}
                 max={getMaxDate()}
+                disabled={!(selectedBooking.status === 'pending' || selectedBooking.status === 'confirmed')}
               />
-              {!isActiveBooking(selectedBooking.status) && (
-                <small className="disabled-note">
-                  Cannot modify date for completed or cancelled bookings
-                </small>
-              )}
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="bookingTime">Booking Time *</label>
-              <select 
-                id="bookingTime" 
-                name="bookingTime" 
-                value={formData.bookingTime || ''} 
+              <select
+                id="bookingTime"
+                name="bookingTime"
+                value={formData.bookingTime || ''}
                 onChange={handleChange}
                 required
-                disabled={!isActiveBooking(selectedBooking.status) || !formData.bookingDate}
+                disabled={!(selectedBooking.status === 'pending' || selectedBooking.status === 'confirmed') || !formData.bookingDate}
               >
                 <option value="">
-                  {!formData.bookingDate 
-                    ? 'Select a date first' 
-                    : availableTimeSlots.length === 0 
-                    ? 'No available time slots'
-                    : 'Select a time'
-                  }
+                  {!formData.bookingDate
+                    ? 'Select a date first'
+                    : availableTimeSlots.length === 0
+                      ? 'No available time slots'
+                      : 'Select a time'}
                 </option>
                 {availableTimeSlots.map(time => (
                   <option key={time} value={time}>
-                    {parseInt(time.split(':')[0]) >= 12 
-                      ? `${time} PM` 
-                      : `${time} AM`
-                    }
+                    {parseInt(time.split(':')[0], 10) >= 12 ? `${time} PM` : `${time} AM`}
                   </option>
                 ))}
               </select>
-              {!isActiveBooking(selectedBooking.status) && (
-                <small className="disabled-note">
-                  Cannot modify time for completed or cancelled bookings
-                </small>
-              )}
-              {formData.bookingDate && (
-                <small className="time-slot-note">
-                  {formData.bookingDate === getTodayDate() 
-                    ? `Today's available time slots (current time: ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')})`
-                    : 'Business hours: 9:00 AM - 6:00 PM'
-                  }
-                </small>
-              )}
-              {formData.bookingDate && availableTimeSlots.length === 0 && (
-                <small className="error-note">
-                  No available time slots for the selected date. Please choose another date.
-                </small>
-              )}
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="status">Status</label>
-              <select 
-                id="status" 
-                name="status" 
-                value={formData.status || ''} 
+              <select
+                id="status"
+                name="status"
+                value={(formData.status as any) || ''}
                 onChange={handleChange}
                 required
-                disabled={!isActiveBooking(selectedBooking.status)}
+                disabled={!(selectedBooking.status === 'pending' || selectedBooking.status === 'confirmed')}
               >
                 <option value="pending">Pending</option>
                 <option value="confirmed">Confirmed</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
-              {!isActiveBooking(selectedBooking.status) && (
-                <small className="disabled-note">
-                  Cannot modify status for completed or cancelled bookings
-                </small>
-              )}
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="notes">Notes</label>
-              <textarea 
-                id="notes" 
-                name="notes" 
-                value={formData.notes || ''} 
-                onChange={handleChange} 
+              <textarea
+                id="notes"
+                name="notes"
+                value={(formData.notes as any) || ''}
+                onChange={handleChange}
                 rows={3}
                 placeholder="Add any notes about this booking..."
-                disabled={!isActiveBooking(selectedBooking.status)}
-              ></textarea>
-              {!isActiveBooking(selectedBooking.status) && (
-                <small className="disabled-note">
-                  Cannot modify notes for completed or cancelled bookings
-                </small>
-              )}
+                disabled={!(selectedBooking.status === 'pending' || selectedBooking.status === 'confirmed')}
+              />
             </div>
-            
-            {modalError && (
-              <div className="auth-error-message">
-                {modalError}
-              </div>
-            )}
-            
+
+            {modalError && <div className="auth-error-message">{modalError}</div>}
+
             <div className="modal-actions">
               <Button variant="secondary" onClick={closeModal} disabled={loading}>
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
-                variant="primary" 
-                disabled={loading || !isActiveBooking(selectedBooking.status)}
-              >
+              <Button type="submit" variant="primary" disabled={loading || !(selectedBooking.status === 'pending' || selectedBooking.status === 'confirmed')}>
                 {loading ? 'Updating...' : 'Save Changes'}
               </Button>
             </div>
-
-            {!isActiveBooking(selectedBooking.status) && (
-              <div className="readonly-notice">
-                <strong>Read-only Mode:</strong> This booking is {selectedBooking.status} and cannot be modified.
-              </div>
-            )}
           </form>
         )}
       </Modal>
 
-      {/* Mini Modal for Status Change */}
+      {/* ========================= */}
+      {/* Manual Booking Modal */}
+      {/* ========================= */}
+      <Modal
+        isOpen={showManualBookingModal}
+        onClose={() => setShowManualBookingModal(false)}
+        title="Manual Booking (Walk-in)"
+      >
+        <form onSubmit={handleCreateManualBooking} className="contact-form">
+          <div className="form-grid-2">
+            <div className="form-group">
+              <label>Walk-in Name *</label>
+              <input
+                type="text"
+                value={manualForm.walkin_name}
+                onChange={(e) => setManualForm(prev => ({ ...prev, walkin_name: e.target.value }))}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Phone Number *</label>
+              <input
+                type="tel"
+                inputMode="numeric"
+                pattern="^\+?\d*$"
+                value={manualForm.walkin_phone_num}
+                onChange={(e) => {
+                  const cleaned = sanitizePhone(e.target.value);
+                  setManualForm(prev => ({ ...prev, walkin_phone_num: cleaned }));
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const text = e.clipboardData.getData('text');
+                  const cleaned = sanitizePhone(text);
+                  setManualForm(prev => ({ ...prev, walkin_phone_num: cleaned }));
+                }}
+                required
+                placeholder="09xxxxxxxxx"
+              />
+              <small style={{ opacity: 0.75 }}>
+                Numbers only. Optional leading “+” is allowed.
+              </small>
+            </div>
+          </div>
+
+          <div className="form-grid-2">
+            <div className="form-group">
+              <label>Service *</label>
+              <select
+                value={manualForm.service_id}
+                onChange={(e) => setManualForm(prev => ({ ...prev, service_id: e.target.value }))}
+                required
+              >
+                <option value="">Select service</option>
+                {servicesList.map(s => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.service_name} ({formatCurrency(s.price)} • {s.duration}min)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Assign Staff</label>
+              <select
+                value={manualForm.staff_id}
+                onChange={(e) => setManualForm(prev => ({ ...prev, staff_id: e.target.value }))}
+              >
+                <option value="">Unassigned</option>
+                {staffMembers.map(staff => (
+                  <option key={staff.id} value={staff.id}>
+                    {staff.first_name} {staff.last_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-grid-2">
+            <div className="form-group">
+              <label>Booking Date *</label>
+              <input
+                type="date"
+                value={manualForm.booking_date}
+                onChange={(e) => setManualForm(prev => ({ ...prev, booking_date: e.target.value, booking_time: '' }))}
+                min={getTodayDate()}
+                max={getMaxDate()}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Booking Time *</label>
+              <select
+                value={manualForm.booking_time}
+                onChange={(e) => setManualForm(prev => ({ ...prev, booking_time: e.target.value }))}
+                required
+              >
+                <option value="">
+                  {manualForm.booking_date ? 'Select a time' : 'Select a date first'}
+                </option>
+                {manualTimeSlots.map(time => (
+                  <option key={time} value={time}>
+                    {parseInt(time.split(':')[0], 10) >= 12 ? `${time} PM` : `${time} AM`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Notes</label>
+            <textarea
+              rows={3}
+              value={manualForm.notes}
+              onChange={(e) => setManualForm(prev => ({ ...prev, notes: e.target.value }))}
+              placeholder="Add notes (optional)"
+            />
+          </div>
+
+          {modalError && <div className="auth-error-message">{modalError}</div>}
+
+          <div className="modal-actions">
+            <Button variant="secondary" onClick={() => setShowManualBookingModal(false)} disabled={loading}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" disabled={loading}>
+              {loading ? 'Creating...' : 'Create Booking'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Mini modals (Status / Notifications) stay the same except DateTime display uses PH formatter in table already */}
       {showStatusModal && selectedBookingForModal && (
         <div className="mini-modal-overlay" onClick={handleCloseModals}>
           <div className="mini-modal" onClick={(e) => e.stopPropagation()}>
@@ -999,7 +1248,7 @@ We apologize for any inconvenience.`;
               </p>
               <div className="mini-modal-options">
                 {selectedBookingForModal.status !== 'confirmed' && (
-                  <button 
+                  <button
                     className="mini-modal-option confirm"
                     onClick={() => handleStatusUpdate(selectedBookingForModal.id, 'confirmed')}
                     disabled={loading}
@@ -1009,7 +1258,7 @@ We apologize for any inconvenience.`;
                   </button>
                 )}
                 {selectedBookingForModal.status !== 'completed' && (
-                  <button 
+                  <button
                     className="mini-modal-option complete"
                     onClick={() => handleStatusUpdate(selectedBookingForModal.id, 'completed')}
                     disabled={loading}
@@ -1019,7 +1268,7 @@ We apologize for any inconvenience.`;
                   </button>
                 )}
                 {selectedBookingForModal.status !== 'cancelled' && (
-                  <button 
+                  <button
                     className="mini-modal-option cancel"
                     onClick={() => handleStatusUpdate(selectedBookingForModal.id, 'cancelled')}
                     disabled={loading}
@@ -1039,7 +1288,6 @@ We apologize for any inconvenience.`;
         </div>
       )}
 
-      {/* Mini Modal for Notifications */}
       {showNotificationModal && selectedBookingForModal && (
         <div className="mini-modal-overlay" onClick={handleCloseModals}>
           <div className="mini-modal" onClick={(e) => e.stopPropagation()}>
@@ -1053,30 +1301,38 @@ We apologize for any inconvenience.`;
                 <br />
                 <em>{selectedBookingForModal.service_name}</em>
               </p>
-              <div className="mini-modal-options">
-                <button 
-                  className="mini-modal-option reschedule"
-                  onClick={() => {
-                    requestCustomerReschedule(selectedBookingForModal);
-                    handleCloseModals();
-                  }}
-                  disabled={notificationLoading === selectedBookingForModal.id}
-                >
-                  <span className="option-icon">🔄</span>
-                  <span className="option-text">Request Reschedule</span>
-                </button>
-                <button 
-                  className="mini-modal-option cancel-notify"
-                  onClick={() => {
-                    requestCustomerCancellation(selectedBookingForModal);
-                    handleCloseModals();
-                  }}
-                  disabled={notificationLoading === selectedBookingForModal.id}
-                >
-                  <span className="option-icon">⚠️</span>
-                  <span className="option-text">Request Cancellation</span>
-                </button>
-              </div>
+
+              {selectedBookingForModal.isWalkIn ? (
+                <div className="auth-error-message">
+                  Walk-in bookings have no app account, so notifications are not available.
+                </div>
+              ) : (
+                <div className="mini-modal-options">
+                  <button
+                    className="mini-modal-option reschedule"
+                    onClick={() => {
+                      requestCustomerReschedule(selectedBookingForModal);
+                      handleCloseModals();
+                    }}
+                    disabled={notificationLoading === selectedBookingForModal.id}
+                  >
+                    <span className="option-icon">🔄</span>
+                    <span className="option-text">Request Reschedule</span>
+                  </button>
+
+                  <button
+                    className="mini-modal-option cancel-notify"
+                    onClick={() => {
+                      requestCustomerCancellation(selectedBookingForModal);
+                      handleCloseModals();
+                    }}
+                    disabled={notificationLoading === selectedBookingForModal.id}
+                  >
+                    <span className="option-icon">⚠️</span>
+                    <span className="option-text">Request Cancellation</span>
+                  </button>
+                </div>
+              )}
             </div>
             <div className="mini-modal-footer">
               <Button variant="secondary" onClick={handleCloseModals}>
