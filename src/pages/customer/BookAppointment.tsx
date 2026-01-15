@@ -29,6 +29,17 @@ interface PreselectedService {
   category: string;
 }
 
+const formatLocalDate = (yyyyMmDd: string) => {
+  if (!yyyyMmDd) return '';
+  const [y, m, d] = yyyyMmDd.split('-').map(Number);
+  // ✅ This creates a Date in LOCAL time (no UTC shift)
+  return new Date(y, m - 1, d).toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
+
 const BookAppointment: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -561,7 +572,7 @@ const BookAppointment: React.FC = () => {
                         <strong>Staff:</strong> {selectedStaff.first_name} {selectedStaff.last_name}
                       </div>
                       <div className="summary-item">
-                        <strong>Date:</strong> {new Date(selectedDate).toLocaleDateString()}
+                      <strong>Date:</strong> {formatLocalDate(selectedDate)}
                       </div>
                       <div className="summary-item">
                         <strong>Time:</strong> {selectedTime}

@@ -109,21 +109,15 @@ const formatDisplayDateTimePH = (date: string, time: string) => {
   if (!date) return 'N/A';
 
   try {
-    // Interpret stored booking_date + booking_time as PH local time.
-    // Use Intl with timeZone=Asia/Manila to display consistently.
-    const [hh = '00', mm = '00'] = (time || '00:00').split(':');
+    const [y, m, d] = date.split('-').map(Number);
+    const [hh = '0', mm = '0'] = (time || '00:00').split(':');
 
-    // Create a "naive" UTC date from the YMD and HMS, then display it in PH.
-    // (This avoids the browser auto-shifting based on local timezone.)
-    const dtUTC = new Date(Date.UTC(
-      Number(date.slice(0, 4)),
-      Number(date.slice(5, 7)) - 1,
-      Number(date.slice(8, 10)),
-      Number(hh),
-      Number(mm)
-    ));
+    // ✅ Build a Date in LOCAL time (not UTC)
+    // This avoids the "UTC midnight" bug.
+    const local = new Date(y, m - 1, d, Number(hh), Number(mm));
 
-    const formatted = new Intl.DateTimeFormat('en-US', {
+    // ✅ Force display in PH timezone
+    return new Intl.DateTimeFormat('en-US', {
       timeZone: PH_TZ,
       month: 'short',
       day: 'numeric',
@@ -131,9 +125,7 @@ const formatDisplayDateTimePH = (date: string, time: string) => {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true
-    }).format(dtUTC);
-
-    return formatted;
+    }).format(local);
   } catch {
     return 'Invalid date';
   }
@@ -161,6 +153,31 @@ const ManageBookings: React.FC = () => {
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [selectedBookingForModal, setSelectedBookingForModal] = useState<BookingWithRelations | null>(null);
 
+  
+  const [showReasonModal, setShowReasonModal] = useState(false);
+  const [reasonType, setReasonType] = useState<'reschedule_request' | 'cancellation_request' | null>(null);
+  const [reasonBooking, setReasonBooking] = useState<BookingWithRelations | null>(null);
+  const [selectedReason, setSelectedReason] = useState<string>('');
+  const [customReason, setCustomReason] = useState<string>('');
+
+
+  const RESCHEDULE_REASONS = [
+  'Assigned staff is unavailable',
+  'Service requires rescheduling due to schedule conflict',
+  'Unexpected emergency / force majeure',
+  'Clinic is fully booked for that time',
+  'Equipment / room is unavailable',
+  'Other (please specify)'
+];
+
+const CANCELLATION_REASONS = [
+  'Assigned staff is unavailable',
+  'Service is temporarily unavailable',
+  'Clinic is closed on the selected date',
+  'Unexpected emergency / force majeure',
+  'Booking cannot be accommodated',
+  'Other (please specify)'
+];
   // Manual booking modal (walk-in)
   const [showManualBookingModal, setShowManualBookingModal] = useState(false);
   const [manualForm, setManualForm] = useState({
@@ -177,6 +194,23 @@ const ManageBookings: React.FC = () => {
   const getTodayDate = () => getPHDateString();
   const getMaxDate = () => addDaysToYMD(getPHDateString(), 30);
 
+
+
+  const openReasonModal = (booking: BookingWithRelations, type: 'reschedule_request' | 'cancellation_request') => {
+  setReasonBooking(booking);
+  setReasonType(type);
+  setSelectedReason('');
+  setCustomReason('');
+  setShowReasonModal(true);
+};
+
+const closeReasonModal = () => {
+  setShowReasonModal(false);
+  setReasonType(null);
+  setReasonBooking(null);
+  setSelectedReason('');
+  setCustomReason('');
+};
   // Fetch bookings with relations (users + walk-in)
   const fetchBookings = async () => {
     try {
@@ -357,111 +391,133 @@ const ManageBookings: React.FC = () => {
   }, []);
 
   // ---------- Notifications ----------
-  const sendBookingNotification = async (
-    booking: BookingWithRelations,
-    notificationType: 'reschedule_request' | 'cancellation_request'
-  ) => {
-    if (booking.isWalkIn || !booking.customerId) {
-      throw new Error('This booking is for a walk-in customer. Notifications are only available for registered users.');
-    }
+ const sendBookingNotification = async (
+  booking: BookingWithRelations,
+  notificationType: 'reschedule_request' | 'cancellation_request',
+  reasonText?: string
+) => {
+  // Walk-ins cannot receive app notifications
+  if (booking.isWalkIn || !booking.customerId) {
+    throw new Error(
+      'This booking is for a walk-in customer. Notifications are only available for registered users.'
+    );
+  }
 
-    try {
-      setNotificationLoading(booking.id);
-      setError(null);
+  try {
+    setNotificationLoading(booking.id);
+    setError(null);
 
-      // ✅ format in PH timezone
-      const [hh = '00', mm = '00'] = (booking.booking_time || '00:00').split(':');
-      const dtUTC = new Date(Date.UTC(
+    // ✅ Format booking datetime in PH timezone (Asia/Manila)
+    const [hh = '00', mm = '00'] = (booking.booking_time || '00:00').split(':');
+
+    const dtUTC = new Date(
+      Date.UTC(
         Number(booking.booking_date.slice(0, 4)),
         Number(booking.booking_date.slice(5, 7)) - 1,
         Number(booking.booking_date.slice(8, 10)),
         Number(hh),
         Number(mm)
-      ));
+      )
+    );
 
-      const formattedDate = new Intl.DateTimeFormat('en-US', {
-        timeZone: PH_TZ,
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      }).format(dtUTC);
+    const formattedDate = new Intl.DateTimeFormat('en-US', {
+      timeZone: PH_TZ,
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    }).format(dtUTC);
 
-      const formattedTime = new Intl.DateTimeFormat('en-US', {
-        timeZone: PH_TZ,
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      }).format(dtUTC);
+    const formattedTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: PH_TZ,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    }).format(dtUTC);
 
-      const formattedDateTime = `${formattedDate} at ${formattedTime}`;
+    const formattedDateTime = `${formattedDate} at ${formattedTime}`;
 
-      const notificationData: any = {
-        user_id: booking.customerId,
-        booking_id: booking.id,
-        type: notificationType,
-        title: '',
-        message: '',
-        read: false,
-        created_at: new Date().toISOString()
-      };
+    // ✅ Optional reason block (markdown-friendly)
+    const reasonBlock =
+      reasonText && reasonText.trim()
+        ? `**Reason:** ${reasonText.trim()}\n\n`
+        : '';
 
-      switch (notificationType) {
-        case 'reschedule_request':
-          notificationData.title = '🔁 Action Required: Reschedule Your Appointment';
-          notificationData.message = `Your booking for **${booking.service_name}** on **${formattedDateTime}** needs to be rescheduled.
+    const notificationData: any = {
+      user_id: booking.customerId,
+      booking_id: booking.id,
+      type: notificationType,
+      title: '',
+      message: '',
+      read: false,
+      created_at: new Date().toISOString()
+    };
 
-Please choose a new date and time that works for you.
+    // ✅ Build title + message (include reason if provided)
+    switch (notificationType) {
+      case 'reschedule_request':
+        notificationData.title = '🔁 Action Required: Reschedule Your Appointment';
+        notificationData.message = `Your booking for **${booking.service_name}** on **${formattedDateTime}** needs to be rescheduled.
+
+${reasonBlock}Please choose a new date and time that works for you.
 
 If you have any questions, please contact our support team.`;
-          break;
+        break;
 
-        case 'cancellation_request':
-          notificationData.title = '⚠️ Action Required: Confirm Cancellation';
-          notificationData.message = `Your booking for **${booking.service_name}** on **${formattedDateTime}** cannot be confirmed as scheduled.
+      case 'cancellation_request':
+        notificationData.title = '⚠️ Action Required: Confirm Cancellation';
+        notificationData.message = `Your booking for **${booking.service_name}** on **${formattedDateTime}** cannot be confirmed as scheduled.
 
-Please cancel this booking or contact our support team to discuss alternative options.
+${reasonBlock}Please cancel this booking or contact our support team to discuss alternative options.
 
 We apologize for any inconvenience.`;
-          break;
-      }
-
-      const { error: notificationError } = await supabase
-        .from('notifications')
-        .insert([notificationData]);
-
-      if (notificationError) throw notificationError;
-
-      await supabase
-        .from('bookings')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', booking.id);
-
-      return true;
-    } finally {
-      setNotificationLoading(null);
+        break;
     }
-  };
 
-  const requestCustomerReschedule = async (booking: BookingWithRelations) => {
-    try {
-      await sendBookingNotification(booking, 'reschedule_request');
-      setSuccessMessage(`✅ ${booking.customer_name} has been notified to reschedule their ${booking.service_name} appointment.`);
-      setTimeout(() => setSuccessMessage(null), 5000);
-    } catch (err: any) {
-      setError(`Failed to request reschedule: ${err.message}`);
-    }
-  };
+    // ✅ Insert notification
+    const { error: notificationError } = await supabase
+      .from('notifications')
+      .insert([notificationData]);
 
-  const requestCustomerCancellation = async (booking: BookingWithRelations) => {
-    try {
-      await sendBookingNotification(booking, 'cancellation_request');
-      setSuccessMessage(`✅ ${booking.customer_name} has been notified to cancel their ${booking.service_name} appointment.`);
-      setTimeout(() => setSuccessMessage(null), 5000);
-    } catch (err: any) {
-      setError(`Failed to request cancellation: ${err.message}`);
-    }
-  };
+    if (notificationError) throw notificationError;
+
+    // ✅ Touch booking updated_at (optional, but keeps UI in sync)
+    const { error: touchError } = await supabase
+      .from('bookings')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', booking.id);
+
+    if (touchError) throw touchError;
+
+    return true;
+  } finally {
+    setNotificationLoading(null);
+  }
+};
+
+const requestCustomerReschedule = async (booking: BookingWithRelations, reason?: string) => {
+  try {
+    await sendBookingNotification(booking, 'reschedule_request', reason);
+    setSuccessMessage(
+      `✅ ${booking.customer_name} has been notified to reschedule their ${booking.service_name} appointment.`
+    );
+    setTimeout(() => setSuccessMessage(null), 5000);
+  } catch (err: any) {
+    setError(`Failed to request reschedule: ${err.message}`);
+  }
+};
+
+const requestCustomerCancellation = async (booking: BookingWithRelations, reason?: string) => {
+  try {
+    await sendBookingNotification(booking, 'cancellation_request', reason);
+    setSuccessMessage(
+      `✅ ${booking.customer_name} has been notified to cancel their ${booking.service_name} appointment.`
+    );
+    setTimeout(() => setSuccessMessage(null), 5000);
+  } catch (err: any) {
+    setError(`Failed to request cancellation: ${err.message}`);
+  }
+};
 
   const sendAutomaticNotification = async (bookingId: string, newStatus: BookingStatus) => {
     try {
@@ -649,6 +705,9 @@ We apologize for any inconvenience.`;
     });
     setShowManualBookingModal(true);
   };
+
+  
+
 
   // ✅ phone sanitizer: keep digits only (optionally allow leading +)
   const sanitizePhone = (raw: string) => {
@@ -1232,6 +1291,83 @@ We apologize for any inconvenience.`;
         </form>
       </Modal>
 
+      <Modal
+  isOpen={showReasonModal}
+  onClose={closeReasonModal}
+  title={reasonType === 'reschedule_request' ? 'Reason for Reschedule' : 'Reason for Cancellation'}
+>
+ <div className="contact-form reason-modal">
+    <p style={{ marginBottom: 12, opacity: 0.85 }}>
+      Select a reason for notifying <strong>{reasonBooking?.customer_name}</strong>.
+    </p>
+
+    <div className="form-group">
+      <label>Reason *</label>
+
+  <div className="reason-options">
+  {(reasonType === 'reschedule_request' ? RESCHEDULE_REASONS : CANCELLATION_REASONS).map((r) => (
+    <label key={r} className="reason-option">
+      <input
+        type="radio"
+        name="reason"
+        value={r}
+        checked={selectedReason === r}
+        onChange={(e) => setSelectedReason(e.target.value)}
+      />
+      <span className="reason-text">{r}</span>
+    </label>
+  ))}
+</div>
+    </div>
+
+    {selectedReason === 'Other (please specify)' && (
+      <div className="form-group">
+        <label>Custom Reason *</label>
+        <textarea
+          rows={3}
+          value={customReason}
+          onChange={(e) => setCustomReason(e.target.value)}
+          placeholder="Type the reason here..."
+        />
+      </div>
+    )}
+
+    <div className="modal-actions">
+      <Button variant="secondary" onClick={closeReasonModal}>
+        Cancel
+      </Button>
+
+      <Button
+        variant="primary"
+        disabled={
+          !reasonBooking ||
+          !reasonType ||
+          !selectedReason ||
+          (selectedReason === 'Other (please specify)' && !customReason.trim())
+        }
+        onClick={async () => {
+          if (!reasonBooking || !reasonType) return;
+
+          const reasonText =
+            selectedReason === 'Other (please specify)'
+              ? customReason.trim()
+              : selectedReason;
+
+          setShowReasonModal(false);
+
+          if (reasonType === 'reschedule_request') {
+            await requestCustomerReschedule(reasonBooking, reasonText);
+          } else {
+            await requestCustomerCancellation(reasonBooking, reasonText);
+          }
+        }}
+      >
+        Send Notification
+      </Button>
+    </div>
+  </div>
+</Modal>
+
       {/* Mini modals (Status / Notifications) stay the same except DateTime display uses PH formatter in table already */}
       {showStatusModal && selectedBookingForModal && (
         <div className="mini-modal-overlay" onClick={handleCloseModals}>
@@ -1308,26 +1444,27 @@ We apologize for any inconvenience.`;
                 </div>
               ) : (
                 <div className="mini-modal-options">
-                  <button
-                    className="mini-modal-option reschedule"
-                    onClick={() => {
-                      requestCustomerReschedule(selectedBookingForModal);
-                      handleCloseModals();
-                    }}
-                    disabled={notificationLoading === selectedBookingForModal.id}
-                  >
+                 <button
+                  className="mini-modal-option reschedule"
+                  onClick={() => {
+                    openReasonModal(selectedBookingForModal, 'reschedule_request');
+                    handleCloseModals();
+                  }}
+                  disabled={notificationLoading === selectedBookingForModal.id}
+                >
                     <span className="option-icon">🔄</span>
                     <span className="option-text">Request Reschedule</span>
                   </button>
 
-                  <button
+                                  <button
                     className="mini-modal-option cancel-notify"
                     onClick={() => {
-                      requestCustomerCancellation(selectedBookingForModal);
+                      openReasonModal(selectedBookingForModal, 'cancellation_request');
                       handleCloseModals();
                     }}
                     disabled={notificationLoading === selectedBookingForModal.id}
                   >
+
                     <span className="option-icon">⚠️</span>
                     <span className="option-text">Request Cancellation</span>
                   </button>
