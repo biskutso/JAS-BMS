@@ -206,7 +206,7 @@ const ViewServices: React.FC = () => {
                     <option value="name">Name (A-Z)</option>
                     <option value="price-low">Price (Low to High)</option>
                     <option value="price-high">Price (High to Low)</option>
-                    <option value="duration">Duration (Short to Long)</option>
+                    {/* <option value="duration">Duration (Short to Long)</option> */}
                   </select>
                 </div>
               </div>
