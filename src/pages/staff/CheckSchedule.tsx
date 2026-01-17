@@ -289,7 +289,29 @@ const CheckSchedule: React.FC = () => {
       key: 'actions',
       render: (item: BookingWithRelations) => (
         <div className="schedule-actions">
-          {(item.status === 'pending' || item.status === 'confirmed') && (
+          {item.status === 'pending' && (
+          <>
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={() => updateBookingStatus(item, 'confirmed')}
+              className="confirm-button"
+            >
+              Confirm
+            </Button>
+            <Button
+                variant="text"
+                size="small"
+                onClick={() => updateBookingStatus(item, 'cancelled')}
+                className="cancel-button"
+              >
+                Cancel
+              </Button>
+            </>
+          )}
+
+          {/* Confirmed → Complete + Cancel */}
+          {item.status === 'confirmed' && (
             <>
               <Button
                 variant="secondary"
@@ -309,8 +331,17 @@ const CheckSchedule: React.FC = () => {
               </Button>
             </>
           )}
-          {item.status === 'completed' && <span className="completed-label">Completed</span>}
-          {item.status === 'cancelled' && <span className="cancelled-label">Cancelled</span>}
+
+          {/* Completed */}
+          {item.status === 'completed' && (
+            <span className="completed-label">Completed</span>
+          )}
+
+          {/* Cancelled */}
+          {item.status === 'cancelled' && (
+            <span className="cancelled-label">Cancelled</span>
+          )}
+
         </div>
       )
     }

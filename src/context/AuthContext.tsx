@@ -1,4 +1,3 @@
-// src/context/AuthContext.tsx
 import React, {
   createContext,
   useContext,
@@ -26,6 +25,7 @@ interface AuthContextType {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoadingAuth: boolean;
+  isProfileReady: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (
     email: string,
@@ -43,37 +43,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isProfileReady, setIsProfileReady] = useState(false);
 
-  // ---- guards ----
   const mountedRef = useRef(true);
   const bootstrappedRef = useRef(false);
+  const lastHydratedUserIdRef = useRef<string | null>(null);
+  const profileInFlightRef = useRef<Promise<void> | null>(null);
+  const suppressNextLoginLogRef = useRef(false);
 
-  // prevents duplicate SIGNED_IN events causing duplicate logs (dev/edge cases)
-  const lastLogRef = useRef<{ type: 'login' | 'logout'; at: number } | null>(null);
-
-  const fetchUserProfile = async (userId: string): Promise<AuthUser | null> => {
+  const readCachedAuthUser = (): AuthUser | null => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (error || !data) return null;
-
-      return {
-        id: data.id,
-        email: data.email || '',
-        first_name: data.first_name || '',
-        last_name: data.last_name || '',
-        role: (data.role as UserRole) || 'customer',
-        created_at: data.created_at,
-        phone_num: data.phone_num,
-        profile_pic: data.profile_pic
-      };
+      const raw = localStorage.getItem('authUser');
+      return raw ? (JSON.parse(raw) as AuthUser) : null;
     } catch {
       return null;
     }
+  };
+
+  const fetchUserProfile = async (userId: string): Promise<AuthUser | null> => {
+    const { data } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      email: data.email || '',
+      first_name: data.first_name || '',
+      last_name: data.last_name || '',
+      role: (data.role as UserRole) || 'customer',
+      created_at: data.created_at,
+      phone_num: data.phone_num,
+      profile_pic: data.profile_pic
+    };
   };
 
   const createUserProfile = async (
@@ -83,70 +88,83 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     lastName: string,
     role: string = 'customer'
   ) => {
-    const { error } = await supabase.from('users').insert([
+    await supabase.from('users').insert([
       { id: userId, email, first_name: firstName, last_name: lastName, role }
     ]);
-
-    if (error && (error as any).code === '23505') return true; // already exists
-    return !error;
   };
 
-  const applySession = async (session: any) => {
+  const applySessionFast = (session: any) => {
     if (!mountedRef.current) return;
 
     const sessionUser = session?.user;
 
     if (!sessionUser) {
+      lastHydratedUserIdRef.current = null;
       setUser(null);
       setIsAuthenticated(false);
+      setIsProfileReady(false);
       localStorage.removeItem('authUser');
       return;
     }
 
-    let profile = await fetchUserProfile(sessionUser.id);
-
-    if (!profile) {
-      const created = await createUserProfile(
-        sessionUser.id,
-        sessionUser.email || '',
-        '',
-        '',
-        'customer'
-      );
-      if (created) profile = await fetchUserProfile(sessionUser.id);
-    }
-
-    const authUser: AuthUser =
-      profile || {
-        id: sessionUser.id,
-        email: sessionUser.email || '',
-        first_name: '',
-        last_name: '',
-        role: 'customer'
-      };
-
-    if (!mountedRef.current) return;
-
-    setUser(authUser);
     setIsAuthenticated(true);
-    localStorage.setItem('authUser', JSON.stringify(authUser));
+    setIsProfileReady(false);
+
+    const cached = readCachedAuthUser();
+
+    // setUser((prev) => {
+    //   if (prev?.id === sessionUser.id) return prev;
+    //   if (cached?.id === sessionUser.id) return cached;
+
+    //   const basic: AuthUser = {
+    //     id: sessionUser.id,
+    //     email: sessionUser.email || '',
+    //     first_name: '',
+    //     last_name: '',
+    //     role: 'customer'
+    //   };
+
+    //   localStorage.setItem('authUser', JSON.stringify(basic));
+    //   return basic;
+    // });
+
+    if (lastHydratedUserIdRef.current !== sessionUser.id) {
+      lastHydratedUserIdRef.current = sessionUser.id;
+      void hydrateProfile(sessionUser.id, sessionUser.email || '');
+    }
   };
 
-  const shouldLog = (type: 'login' | 'logout') => {
-    const now = Date.now();
-    const last = lastLogRef.current;
-    if (last && last.type === type && now - last.at < 2000) return false;
-    lastLogRef.current = { type, at: now };
-    return true;
+  const hydrateProfile = async (userId: string, email: string) => {
+    if (profileInFlightRef.current) return;
+
+    profileInFlightRef.current = (async () => {
+      try {
+        let profile = await fetchUserProfile(userId);
+
+        if (!profile) {
+          await createUserProfile(userId, email, '', '', 'customer');
+          profile = await fetchUserProfile(userId);
+        }
+
+        if (!mountedRef.current) return;
+
+        if (profile) {
+          setUser(profile);
+          localStorage.setItem('authUser', JSON.stringify(profile));
+        }
+
+        setIsProfileReady(true);
+      } finally {
+        profileInFlightRef.current = null;
+      }
+    })();
   };
 
-  // ✅ Login: ONLY sign-in. Logging happens in onAuthStateChange SIGNED_IN
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
   };
 
-  // ✅ Signup
   const signup = async (
     email: string,
     password: string,
@@ -158,35 +176,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (error) throw error;
 
     if (data.user) {
-      const created = await createUserProfile(data.user.id, email, firstName, lastName, role);
-      if (!created) throw new Error('Failed to create user profile');
+      await createUserProfile(data.user.id, email, firstName, lastName, role);
     }
   };
 
-  // ✅ Logout: log BEFORE signOut using p_actor_id
   const logout = async () => {
     setIsLoadingAuth(true);
     try {
-      const { data } = await supabase.auth.getSession();
-      const actorId = data.session?.user?.id ?? null;
-
-      // log logout BEFORE signOut (auth.uid() will become null after signOut)
-      if (actorId && shouldLog('logout')) {
-        const { error: rpcErr } = await supabase.rpc('log_auth_activity', {
-          p_action: 'logout',
-          p_actor_id: actorId
-        });
-        if (rpcErr) console.warn('Logout activity log RPC error:', rpcErr);
-      }
-
-      const { error } = await supabase.auth.signOut();
-      if (error) console.error('Logout error:', error);
-
+      await supabase.auth.signOut();
+      lastHydratedUserIdRef.current = null;
       setUser(null);
       setIsAuthenticated(false);
+      setIsProfileReady(false);
       localStorage.removeItem('authUser');
     } finally {
       setIsLoadingAuth(false);
+    }
+  };
+
+  const wake = async () => {
+    try {
+      suppressNextLoginLogRef.current = true;
+      const { data } = await supabase.auth.getSession();
+      applySessionFast(data.session);
+      await supabase.auth.refreshSession();
+    } finally {
+      suppressNextLoginLogRef.current = false;
     }
   };
 
@@ -196,54 +211,45 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const bootstrap = async () => {
       try {
         const { data } = await supabase.auth.getSession();
-        await applySession(data.session);
-      } catch (e) {
-        console.error('Auth bootstrap error:', e);
-        setUser(null);
-        setIsAuthenticated(false);
+        applySessionFast(data.session);
       } finally {
         bootstrappedRef.current = true;
-        if (mountedRef.current) setIsLoadingAuth(false);
+        setIsLoadingAuth(false);
       }
     };
 
     bootstrap();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mountedRef.current) return;
+    const onVis = () => document.visibilityState === 'visible' && wake();
+    const onFocus = () => wake();
 
-      // ignore any events before bootstrap completes (prevents false redirects/logs)
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', onFocus);
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_, session) => {
       if (!bootstrappedRef.current) return;
-
-      // Always keep state synced
-      await applySession(session);
-
-      // ✅ log LOGIN only on real SIGNED_IN (not on refresh bootstrap)
-      if (event === 'SIGNED_IN') {
-        // session exists here
-        const actorId = session?.user?.id ?? null;
-        if (actorId && shouldLog('login')) {
-          const { error: rpcErr } = await supabase.rpc('log_auth_activity', {
-            p_action: 'login',
-            p_actor_id: actorId
-          });
-          if (rpcErr) console.warn('Login activity log RPC error:', rpcErr);
-        }
-      }
-
-      // ✅ do NOT log SIGNED_OUT here (logout() already logs it)
-      // This avoids duplicate logout logs from automatic/token events.
+      applySessionFast(session);
     });
 
     return () => {
       mountedRef.current = false;
       sub.subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', onFocus);
     };
   }, []);
 
   const value = useMemo<AuthContextType>(
-    () => ({ user, isAuthenticated, isLoadingAuth, login, signup, logout }),
-    [user, isAuthenticated, isLoadingAuth]
+    () => ({
+      user,
+      isAuthenticated,
+      isLoadingAuth,
+      isProfileReady,
+      login,
+      signup,
+      logout
+    }),
+    [user, isAuthenticated, isLoadingAuth, isProfileReady]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

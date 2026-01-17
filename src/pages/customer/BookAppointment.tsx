@@ -61,16 +61,58 @@ const BookAppointment: React.FC = () => {
   // Get preselected service from navigation state
   const preselectedService = location.state?.preselectedService as PreselectedService;
 
+  // ✅ ADD: Notify staff for new booking (uses notifications table)
+  const notifyStaffForNewBooking = async (params: {
+    staffId: string;
+    bookingId: string;
+    customerName: string;
+    serviceName: string;
+    bookingDate: string;
+    bookingTime: string;
+  }) => {
+    try {
+      const { staffId, bookingId, customerName, serviceName, bookingDate, bookingTime } = params;
+
+      if (!staffId) return;
+
+      const message = `New booking assigned to you.
+
+Customer: ${customerName}
+Service: ${serviceName}
+Date: ${formatLocalDate(bookingDate)}
+Time: ${bookingTime}
+
+Please check your schedule.`;
+
+      const { error } = await supabase.from('notifications').insert([
+        {
+          user_id: staffId,
+          booking_id: bookingId,
+          type: 'new_booking',
+          title: '📅 New Booking Assigned',
+          message,
+          read: false,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+      if (error) {
+        console.error('❌ Error inserting staff notification:', error);
+      } else {
+        console.log('✅ Staff notified successfully');
+      }
+    } catch (err) {
+      console.error('❌ notifyStaffForNewBooking failed:', err);
+    }
+  };
+
   // Fetch available services from Supabase
   const fetchServices = async () => {
     try {
       setServicesLoading(true);
       console.log('🔄 Fetching services from Supabase...');
-      
-      const { data, error } = await supabase
-        .from('services')
-        .select('*')
-        .order('service_name');
+
+      const { data, error } = await supabase.from('services').select('*').order('service_name');
 
       if (error) {
         console.error('❌ Error fetching services:', error);
@@ -80,14 +122,14 @@ const BookAppointment: React.FC = () => {
       console.log('✅ Services fetched from database:', data);
 
       // Transform data to match Service interface - ensure IDs are strings
-      const transformedServices: Service[] = (data || []).map(service => ({
+      const transformedServices: Service[] = (data || []).map((service) => ({
         id: service.id.toString(), // Convert ID to string
         name: service.service_name,
         description: service.description,
         price: parseFloat(service.price),
         durationMinutes: service.duration,
         category: service.category,
-        imageUrl: service.service_img
+        imageUrl: service.service_img,
       }));
 
       console.log('✅ Transformed services:', transformedServices);
@@ -105,7 +147,7 @@ const BookAppointment: React.FC = () => {
     try {
       setStaffLoading(true);
       console.log('🔄 Fetching staff members from Supabase...');
-      
+
       const { data, error } = await supabase
         .from('users')
         .select('id, first_name, last_name, role')
@@ -118,9 +160,9 @@ const BookAppointment: React.FC = () => {
       }
 
       // Ensure staff IDs are strings
-      const staffWithStringIds = (data || []).map(staff => ({
+      const staffWithStringIds = (data || []).map((staff) => ({
         ...staff,
-        id: staff.id.toString() // Convert ID to string
+        id: staff.id.toString(), // Convert ID to string
       }));
 
       console.log('✅ Staff members fetched:', staffWithStringIds);
@@ -143,20 +185,20 @@ const BookAppointment: React.FC = () => {
     if (preselectedService && services.length > 0 && !servicesLoading) {
       console.log('🎯 Auto-selecting service:', preselectedService);
       console.log('🔍 Looking for service ID:', preselectedService.id, 'Type:', typeof preselectedService.id);
-      console.log('📋 Available services:', services.map(s => ({ id: s.id, type: typeof s.id, name: s.name })));
-      
+      console.log('📋 Available services:', services.map((s) => ({ id: s.id, type: typeof s.id, name: s.name })));
+
       // Convert both IDs to strings for comparison to handle number vs string IDs
       const preselectedId = preselectedService.id.toString();
       console.log('🔄 Converted preselected ID to string:', preselectedId);
-      
+
       // Find the matching service
-      const matchedService = services.find(service => service.id === preselectedId);
+      const matchedService = services.find((service) => service.id === preselectedId);
       if (matchedService) {
         console.log('✅ Found matching service:', matchedService.name);
         setSelectedServiceId(matchedService.id);
       } else {
         console.warn('❌ No matching service found for ID:', preselectedId);
-        console.log('🔍 Available IDs:', services.map(s => s.id));
+        console.log('🔍 Available IDs:', services.map((s) => s.id));
       }
     }
   }, [preselectedService, services, servicesLoading]);
@@ -166,21 +208,21 @@ const BookAppointment: React.FC = () => {
     const slots = [];
     const startHour = 9; // 9 AM
     const endHour = 18; // 6 PM
-    
+
     // Get current time
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
-    
+
     // Check if selected date is today
     const isToday = selectedDate === now.toISOString().split('T')[0];
-    
+
     for (let hour = startHour; hour < endHour; hour++) {
       // For 00 minute slot
       if (!isToday || hour > currentHour || (hour === currentHour && currentMinute < 30)) {
         slots.push(`${hour.toString().padStart(2, '0')}:00`);
       }
-      
+
       // For 30 minute slot (except for the last hour)
       if (hour < endHour - 1) {
         if (!isToday || hour > currentHour || (hour === currentHour && currentMinute <= 30)) {
@@ -188,12 +230,17 @@ const BookAppointment: React.FC = () => {
         }
       }
     }
-    
+
     return slots;
   };
 
   // Check if a time slot is available for the selected staff
-  const isTimeSlotAvailable = async (date: string, time: string, duration: number, staffId: string): Promise<boolean> => {
+  const isTimeSlotAvailable = async (
+    date: string,
+    time: string,
+    duration: number,
+    staffId: string
+  ): Promise<boolean> => {
     try {
       // Check for overlapping bookings for this staff member
       const { data, error } = await supabase
@@ -217,7 +264,7 @@ const BookAppointment: React.FC = () => {
   // Get staff members specialized in the selected service category
   const getSpecializedStaff = (serviceCategory: string) => {
     if (!serviceCategory) return staffMembers;
-    
+
     // You can customize this logic based on your staff specializations
     // For now, we'll return all staff, but you could add a specialization field to users table
     return staffMembers;
@@ -226,7 +273,7 @@ const BookAppointment: React.FC = () => {
   const handleServiceChange = (serviceId: string) => {
     console.log('🔄 Service changed to:', serviceId);
     console.log('📋 Available services:', services);
-    
+
     setSelectedServiceId(serviceId);
     // Reset staff selection when service changes
     setSelectedStaffId('');
@@ -235,7 +282,7 @@ const BookAppointment: React.FC = () => {
   // Handle date change - reset time if needed
   const handleDateChange = (date: string) => {
     setSelectedDate(date);
-    
+
     // If the selected time is no longer valid for the new date, reset it
     if (date && selectedTime) {
       const timeSlots = getAvailableTimeSlots();
@@ -253,7 +300,7 @@ const BookAppointment: React.FC = () => {
       selectedStaffId,
       selectedDate,
       selectedTime,
-      services
+      services,
     });
 
     if (!selectedServiceId || !selectedStaffId || !selectedDate || !selectedTime || !user) {
@@ -266,11 +313,11 @@ const BookAppointment: React.FC = () => {
     setSuccess(null);
 
     // Use string comparison to ensure type consistency
-    const selectedService = services.find(s => s.id === selectedServiceId);
-    const selectedStaff = staffMembers.find(s => s.id === selectedStaffId);
+    const selectedService = services.find((s) => s.id === selectedServiceId);
+    const selectedStaff = staffMembers.find((s) => s.id === selectedStaffId);
 
     console.log('🔍 Looking for service with ID:', selectedServiceId, 'Type:', typeof selectedServiceId);
-    console.log('📋 Available service IDs:', services.map(s => `${s.id} (${typeof s.id})`));
+    console.log('📋 Available service IDs:', services.map((s) => `${s.id} (${typeof s.id})`));
     console.log('✅ Found service:', selectedService);
     console.log('✅ Found staff:', selectedStaff);
 
@@ -290,14 +337,16 @@ const BookAppointment: React.FC = () => {
     try {
       // Check if the time slot is still available for the selected staff
       const isAvailable = await isTimeSlotAvailable(
-        selectedDate, 
-        selectedTime, 
-        selectedService.durationMinutes, 
+        selectedDate,
+        selectedTime,
+        selectedService.durationMinutes,
         selectedStaffId
       );
-      
+
       if (!isAvailable) {
-        setError('This time slot is no longer available for the selected staff member. Please choose another time or staff member.');
+        setError(
+          'This time slot is no longer available for the selected staff member. Please choose another time or staff member.'
+        );
         setLoading(false);
         return;
       }
@@ -312,15 +361,12 @@ const BookAppointment: React.FC = () => {
         status: 'pending',
         total_price: selectedService.price,
         notes: notes || null,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
       };
 
       console.log('📤 Creating booking with data:', bookingData);
 
-      const { data, error } = await supabase
-        .from('bookings')
-        .insert([bookingData])
-        .select();
+      const { data, error } = await supabase.from('bookings').insert([bookingData]).select();
 
       if (error) {
         console.error('❌ Booking creation error:', error);
@@ -328,8 +374,35 @@ const BookAppointment: React.FC = () => {
       }
 
       console.log('✅ Booking created successfully:', data);
-      setSuccess(`Appointment booked successfully with ${selectedStaff.first_name} ${selectedStaff.last_name}! You will receive a confirmation soon.`);
-      
+
+      // ✅ ADD: Staff notification after booking is created
+      const createdBookingId = data?.[0]?.id;
+
+      if (createdBookingId) {
+        // Get customer's name for staff notification (keeps it accurate)
+        const { data: me } = await supabase
+          .from('users')
+          .select('first_name, last_name')
+          .eq('id', user.id)
+          .single();
+
+        const customerName =
+          `${me?.first_name || ''} ${me?.last_name || ''}`.trim() || 'Customer';
+
+        await notifyStaffForNewBooking({
+          staffId: selectedStaffId,
+          bookingId: createdBookingId,
+          customerName,
+          serviceName: selectedService.name,
+          bookingDate: selectedDate,
+          bookingTime: selectedTime,
+        });
+      }
+
+      setSuccess(
+        `Appointment booked successfully with ${selectedStaff.first_name} ${selectedStaff.last_name}! You will receive a confirmation soon.`
+      );
+
       // Redirect after success
       setTimeout(() => navigate('/customer/manage-bookings'), 3000);
     } catch (err: any) {
@@ -340,8 +413,8 @@ const BookAppointment: React.FC = () => {
     }
   };
 
-  const selectedService = services.find(s => s.id === selectedServiceId);
-  const selectedStaff = staffMembers.find(s => s.id === selectedStaffId);
+  const selectedService = services.find((s) => s.id === selectedServiceId);
+  const selectedStaff = staffMembers.find((s) => s.id === selectedStaffId);
   const specializedStaff = getSpecializedStaff(selectedService?.category || '');
   const availableTimeSlots = getAvailableTimeSlots();
 
@@ -349,13 +422,10 @@ const BookAppointment: React.FC = () => {
     <div className="dashboard-layout-container">
       <div className="dashboard-main-content">
         <DashboardHeader title="Book a New Appointment" />
-        
+
         <div className="dashboard-content-wrapper">
           <div className="booking-header">
             <h1 className="page-title">Schedule Your Appointment</h1>
-            {/* <p className="page-subtitle">
-              Choose your desired service, preferred staff member, date, and time to schedule your next visit.
-            </p> */}
           </div>
 
           {/* Show preselected service notification */}
@@ -366,7 +436,7 @@ const BookAppointment: React.FC = () => {
           )}
 
           {/* Loading State */}
-          {(servicesLoading || staffLoading) ? (
+          {servicesLoading || staffLoading ? (
             <div className="booking-loading">
               <div className="loading-spinner"></div>
               <p>Loading available options...</p>
@@ -396,7 +466,7 @@ const BookAppointment: React.FC = () => {
                     className="form-select"
                   >
                     <option value="">-- Choose a Service --</option>
-                    {services.map(service => (
+                    {services.map((service) => (
                       <option key={service.id} value={service.id}>
                         {service.name} - {formatCurrency(service.price)} ({service.durationMinutes} min)
                       </option>
@@ -411,22 +481,12 @@ const BookAppointment: React.FC = () => {
                 {/* Service Details Display */}
                 {selectedService && (
                   <div className="service-details-card">
-                    <h4 className="service-name">
-                      {selectedService.name}
-                    </h4>
-                    <p className="service-description">
-                      {selectedService.description}
-                    </p>
+                    <h4 className="service-name">{selectedService.name}</h4>
+                    <p className="service-description">{selectedService.description}</p>
                     <div className="service-meta">
-                      <span className="service-price">
-                        Price: {formatCurrency(selectedService.price)}
-                      </span>
-                      <span className="service-duration">
-                        Duration: {selectedService.durationMinutes} minutes
-                      </span>
-                      <span className="service-category">
-                        Category: {selectedService.category}
-                      </span>
+                      <span className="service-price">Price: {formatCurrency(selectedService.price)}</span>
+                      <span className="service-duration">Duration: {selectedService.durationMinutes} minutes</span>
+                      <span className="service-category">Category: {selectedService.category}</span>
                     </div>
                   </div>
                 )}
@@ -445,17 +505,16 @@ const BookAppointment: React.FC = () => {
                     <option value="">
                       -- {selectedServiceId ? 'Choose a Staff Member' : 'Select a service first'} --
                     </option>
-                    {specializedStaff.map(staff => (
+                    {specializedStaff.map((staff) => (
                       <option key={staff.id} value={staff.id}>
                         {staff.first_name} {staff.last_name}
                       </option>
                     ))}
                   </select>
                   <small className="form-note">
-                    {selectedServiceId 
+                    {selectedServiceId
                       ? `Choose from our available ${selectedService?.category} specialists`
-                      : 'Please select a service first to see available staff'
-                    }
+                      : 'Please select a service first to see available staff'}
                   </small>
                 </div>
 
@@ -465,9 +524,7 @@ const BookAppointment: React.FC = () => {
                     <h4 className="staff-name">
                       {selectedStaff.first_name} {selectedStaff.last_name}
                     </h4>
-                    <div className="staff-role">
-                      Professional beauty and wellness specialist
-                    </div>
+                    <div className="staff-role">Professional beauty and wellness specialist</div>
                   </div>
                 )}
 
@@ -497,23 +554,20 @@ const BookAppointment: React.FC = () => {
                     disabled={!selectedDate}
                     className="form-select"
                   >
-                    <option value="">
-                      -- {selectedDate ? 'Select a Time' : 'Select a date first'} --
-                    </option>
-                    {availableTimeSlots.map(time => (
+                    <option value="">-- {selectedDate ? 'Select a Time' : 'Select a date first'} --</option>
+                    {availableTimeSlots.map((time) => (
                       <option key={time} value={time}>
-                        {parseInt(time.split(':')[0]) >= 12 
-                          ? `${time} PM` 
-                          : `${time} AM`
-                        }
+                        {parseInt(time.split(':')[0]) >= 12 ? `${time} PM` : `${time} AM`}
                       </option>
                     ))}
                   </select>
                   <small className="form-note">
-                    {selectedDate === new Date().toISOString().split('T')[0] 
-                      ? `Today's available time slots (current time: ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')})`
-                      : 'Business hours: 9:00 AM - 6:00 PM'
-                    }
+                    {selectedDate === new Date().toISOString().split('T')[0]
+                      ? `Today's available time slots (current time: ${new Date()
+                          .getHours()
+                          .toString()
+                          .padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')})`
+                      : 'Business hours: 9:00 AM - 6:00 PM'}
                   </small>
                   {selectedDate && availableTimeSlots.length === 0 && (
                     <small className="form-error-note">
@@ -536,17 +590,8 @@ const BookAppointment: React.FC = () => {
                 </div>
 
                 {/* Feedback Messages */}
-                {error && (
-                  <div className="form-error-message">
-                    {error}
-                  </div>
-                )}
-                
-                {success && (
-                  <div className="form-success-message">
-                    {success}
-                  </div>
-                )}
+                {error && <div className="form-error-message">{error}</div>}
+                {success && <div className="form-success-message">{success}</div>}
 
                 {/* Submit Button */}
                 <Button
@@ -561,9 +606,7 @@ const BookAppointment: React.FC = () => {
                 {/* Booking Summary */}
                 {selectedService && selectedStaff && selectedDate && selectedTime && (
                   <div className="booking-summary-card">
-                    <h5 className="summary-title">
-                      Booking Summary
-                    </h5>
+                    <h5 className="summary-title">Booking Summary</h5>
                     <div className="summary-details">
                       <div className="summary-item">
                         <strong>Service:</strong> {selectedService.name}
@@ -572,7 +615,7 @@ const BookAppointment: React.FC = () => {
                         <strong>Staff:</strong> {selectedStaff.first_name} {selectedStaff.last_name}
                       </div>
                       <div className="summary-item">
-                      <strong>Date:</strong> {formatLocalDate(selectedDate)}
+                        <strong>Date:</strong> {formatLocalDate(selectedDate)}
                       </div>
                       <div className="summary-item">
                         <strong>Time:</strong> {selectedTime}

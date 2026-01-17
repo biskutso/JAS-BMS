@@ -125,6 +125,7 @@ const AppRouter: React.FC = () => {
             <Route path="schedule" element={<CheckSchedule />} />
             <Route path="update-status" element={<UpdateStatus />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="notifications" element={<Notifications />} />
           </Route>
         </Route>
 
@@ -140,6 +141,7 @@ const AppRouter: React.FC = () => {
             <Route path="logs" element={<ActivityLogs />} />
             <Route path="reports" element={<GenerateReports />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="notifications" element={<Notifications />} />
           </Route>
         </Route>
 

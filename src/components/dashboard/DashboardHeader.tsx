@@ -112,7 +112,11 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   };
 
   const handleNotificationsClick = () => {
-    if (user?.role === 'customer') {
+    if (user?.role === 'admin') {
+      navigate('/admin/notifications');
+    } else if (user?.role === 'staff') {
+      navigate('/staff/notifications');
+    } else {
       navigate('/customer/notifications');
     }
   };
@@ -184,7 +188,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                   </div>
                   
                   {/* Notifications button for customers */}
-                  {user.role === 'customer' && (
+                  {['customer', 'staff', 'admin'].includes(user.role) && (
                     <button 
                       id="dashboard-notification-btn"
                       onClick={handleNotificationsClick}

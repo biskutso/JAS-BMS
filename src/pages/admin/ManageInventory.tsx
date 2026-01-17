@@ -20,11 +20,6 @@ interface InventoryItem {
   updated_at: string;
 }
 
-interface StockTransaction {
-  type: 'in' | 'out';
-  quantity: number;
-}
-
 interface TransactionHistory {
   id: string;
   product_id: string;
@@ -33,6 +28,7 @@ interface TransactionHistory {
   quantity: number;
   previous_stock: number;
   new_stock: number;
+  reason?: string;
   created_at: string;
 }
 
@@ -46,20 +42,49 @@ const ManageInventory: React.FC = () => {
   const { isOpen: isStockModalOpen, openModal: openStockModal, closeModal: closeStockModal } = useModal();
   const { isOpen: isDeleteModalOpen, openModal: openDeleteModal, closeModal: closeDeleteModal } = useModal();
   const [activeTab, setActiveTab] = useState<'inventory' | 'transactions'>('inventory');
-  
+
   const [formData, setFormData] = useState<Omit<InventoryItem, 'id' | 'created_at' | 'updated_at'>>({
-    name: '', 
-    category: '', 
+    name: '',
+    category: '',
     stock: 0,
     unit: 'bottle',
     low_stock_alert: 5
   });
-  
+
+  // ✅ Separate reasons for Stock IN and Stock OUT
+  const stockInReasons = [
+    'New supply',
+    'Supplier delivery',
+    'Returned item',
+    'Inventory adjustment',
+    'Other'
+  ] as const;
+
+  const stockOutReasons = [
+    'Used for service',
+    'Damaged',
+    'Expired',
+    'Lost',
+    'Inventory adjustment',
+    'Other'
+  ] as const;
+
+  type ReasonOption = typeof stockInReasons[number] | typeof stockOutReasons[number];
+
+  interface StockTransaction {
+    type: 'in' | 'out';
+    quantity: number;
+    reason_option: ReasonOption;
+    reason_other: string;
+  }
+
   const [stockFormData, setStockFormData] = useState<StockTransaction>({
     type: 'in',
-    quantity: 0
+    quantity: 0,
+    reason_option: 'Supplier delivery',
+    reason_other: ''
   });
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -81,12 +106,17 @@ const ManageInventory: React.FC = () => {
     'bottle', 'tube', 'jar', 'pack', 'box', 'piece', 'ounce', 'ml', 'liter'
   ];
 
+  const resolveReasonText = (tx: StockTransaction) => {
+    if (tx.reason_option !== 'Other') return tx.reason_option;
+    return tx.reason_other.trim();
+  };
+
   // Fetch inventory items from Supabase
   const fetchInventory = async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const { data, error } = await supabase
         .from('inventory')
         .select('*')
@@ -98,7 +128,6 @@ const ManageInventory: React.FC = () => {
       }
 
       setProducts(data || []);
-      
     } catch (err: any) {
       console.error('Error in fetchInventory:', err);
       setError(`Failed to load inventory: ${err.message}`);
@@ -126,6 +155,8 @@ const ManageInventory: React.FC = () => {
   // Create new inventory item
   const createInventoryItem = async (itemData: Omit<InventoryItem, 'id' | 'created_at' | 'updated_at'>) => {
     try {
+      const now = new Date().toISOString();
+
       const { data, error } = await supabase
         .from('inventory')
         .insert([{
@@ -134,15 +165,15 @@ const ManageInventory: React.FC = () => {
           stock: itemData.stock,
           unit: itemData.unit,
           low_stock_alert: itemData.low_stock_alert,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: now,
+          updated_at: now
         }])
         .select();
 
       if (error) throw error;
 
-      // Log the initial stock as an "in" transaction
-      if (itemData.stock > 0) {
+      // ✅ Log the initial stock as an "in" transaction with reason "New supply"
+      if (itemData.stock > 0 && data?.[0]) {
         await supabase
           .from('inventory_transactions')
           .insert([{
@@ -152,12 +183,12 @@ const ManageInventory: React.FC = () => {
             quantity: itemData.stock,
             previous_stock: 0,
             new_stock: itemData.stock,
-            created_at: new Date().toISOString()
+            reason: 'New supply',
+            created_at: now
           }]);
       }
 
       return data?.[0];
-      
     } catch (err: any) {
       throw new Error(`Failed to create inventory item: ${err.message}`);
     }
@@ -175,7 +206,6 @@ const ManageInventory: React.FC = () => {
         .eq('id', itemId);
 
       if (error) throw error;
-      
     } catch (err: any) {
       throw new Error(`Failed to update inventory item: ${err.message}`);
     }
@@ -195,7 +225,6 @@ const ManageInventory: React.FC = () => {
 
       if (transactionError) {
         console.error('Error deleting transactions:', transactionError);
-        // Continue with product deletion even if transaction deletion fails
       }
 
       // Then delete the product
@@ -211,7 +240,6 @@ const ManageInventory: React.FC = () => {
       setSuccessMessage('Product deleted successfully');
       setTimeout(() => setSuccessMessage(null), 3000);
       closeDeleteModal();
-      
     } catch (err: any) {
       setError(`Failed to delete product: ${err.message}`);
     } finally {
@@ -224,6 +252,9 @@ const ManageInventory: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
+
+      const reasonText = resolveReasonText(transaction);
+      if (!reasonText) throw new Error('Reason is required. Please select a reason or type one for "Other".');
 
       // Get current product
       const { data: productData, error: fetchError } = await supabase
@@ -261,7 +292,7 @@ const ManageInventory: React.FC = () => {
 
       if (updateError) throw updateError;
 
-      // Log the transaction
+      // Log the transaction (✅ includes reason)
       const { error: logError } = await supabase
         .from('inventory_transactions')
         .insert([{
@@ -271,6 +302,7 @@ const ManageInventory: React.FC = () => {
           quantity: transaction.quantity,
           previous_stock: currentProduct.stock,
           new_stock: newStock,
+          reason: reasonText,
           created_at: new Date().toISOString()
         }]);
 
@@ -280,16 +312,15 @@ const ManageInventory: React.FC = () => {
 
       await fetchInventory();
       await fetchTransactions();
-      
+
       const actionMessages = {
         'in': 'Stock added successfully',
         'out': 'Stock used successfully'
-      };
+      } as const;
 
       setSuccessMessage(actionMessages[transaction.type]);
       setTimeout(() => setSuccessMessage(null), 3000);
       closeStockModal();
-      
     } catch (err: any) {
       setError(`Failed to process stock transaction: ${err.message}`);
     } finally {
@@ -299,7 +330,7 @@ const ManageInventory: React.FC = () => {
 
   const handleEditClick = (product: InventoryItem) => {
     setEditingProduct(product);
-    setFormData({ 
+    setFormData({
       name: product.name,
       category: product.category,
       stock: product.stock,
@@ -311,9 +342,9 @@ const ManageInventory: React.FC = () => {
 
   const handleAddClick = () => {
     setEditingProduct(null);
-    setFormData({ 
-      name: '', 
-      category: '', 
+    setFormData({
+      name: '',
+      category: '',
       stock: 0,
       unit: 'bottle',
       low_stock_alert: 5
@@ -323,10 +354,17 @@ const ManageInventory: React.FC = () => {
 
   const handleStockActionClick = (product: InventoryItem, actionType: 'in' | 'out') => {
     setSelectedProduct(product);
+
+    // ✅ default reason depends on IN vs OUT
+    const defaultReason: ReasonOption = actionType === 'in' ? 'Supplier delivery' : 'Used for service';
+
     setStockFormData({
       type: actionType,
-      quantity: actionType === 'out' ? 1 : 0
+      quantity: actionType === 'out' ? 1 : 0,
+      reason_option: defaultReason,
+      reason_other: ''
     });
+
     openStockModal();
   };
 
@@ -351,10 +389,20 @@ const ManageInventory: React.FC = () => {
 
   const handleStockFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    setStockFormData(prev => ({
-      ...prev,
-      [name]: type === 'number' ? parseFloat(value) : value,
-    }));
+
+    setStockFormData(prev => {
+      const next = {
+        ...prev,
+        [name]: type === 'number' ? parseFloat(value) : value,
+      } as StockTransaction;
+
+      // If user changes reason_option away from Other, clear reason_other
+      if (name === 'reason_option' && value !== 'Other') {
+        next.reason_other = '';
+      }
+
+      return next;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -379,7 +427,6 @@ const ManageInventory: React.FC = () => {
       await fetchInventory();
       await fetchTransactions();
       closeModal();
-      
     } catch (err: any) {
       setError(`Failed to save product: ${err.message}`);
     } finally {
@@ -393,6 +440,12 @@ const ManageInventory: React.FC = () => {
 
     if (stockFormData.quantity <= 0) {
       setError('Quantity must be greater than 0');
+      return;
+    }
+
+    const reasonText = resolveReasonText(stockFormData);
+    if (!reasonText) {
+      setError('Reason is required. Please select a reason or type one for "Other".');
       return;
     }
 
@@ -435,8 +488,8 @@ const ManageInventory: React.FC = () => {
   }, []);
 
   const inventoryColumns = [
-    { 
-      header: 'Product Name', 
+    {
+      header: 'Product Name',
       key: 'name',
       render: (item: InventoryItem) => (
         <div className="product-info-container">
@@ -445,13 +498,13 @@ const ManageInventory: React.FC = () => {
         </div>
       )
     },
-    { 
-      header: 'Unit', 
+    {
+      header: 'Unit',
       key: 'unit',
       render: (item: InventoryItem) => item.unit
     },
-    { 
-      header: 'Stock Balance', 
+    {
+      header: 'Stock Balance',
       key: 'stock',
       render: (item: InventoryItem) => {
         const status = getStockStatus(item);
@@ -477,11 +530,11 @@ const ManageInventory: React.FC = () => {
       key: 'actions',
       render: (item: InventoryItem) => (
         <div className="inventory-actions">
-          <Button 
-            variant="text" 
-            size="small" 
+          <Button
+            variant="text"
+            size="small"
             onClick={() => handleStockActionClick(item, 'in')}
-            style={{ 
+            style={{
               color: '#2e7d32',
               border: '1px solid #2e7d32',
               padding: '4px 8px',
@@ -490,12 +543,12 @@ const ManageInventory: React.FC = () => {
           >
             Stock In
           </Button>
-          <Button 
-            variant="text" 
-            size="small" 
+          <Button
+            variant="text"
+            size="small"
             onClick={() => handleStockActionClick(item, 'out')}
             disabled={item.stock === 0}
-            style={{ 
+            style={{
               color: item.stock === 0 ? '#999' : '#d32f2f',
               border: `1px solid ${item.stock === 0 ? '#999' : '#d32f2f'}`,
               padding: '4px 8px',
@@ -504,18 +557,18 @@ const ManageInventory: React.FC = () => {
           >
             Stock Out
           </Button>
-          <Button 
-            variant="secondary" 
-            size="small" 
+          <Button
+            variant="secondary"
+            size="small"
             onClick={() => handleEditClick(item)}
           >
             Edit
           </Button>
-          <Button 
-            variant="text" 
-            size="small" 
+          <Button
+            variant="text"
+            size="small"
             onClick={() => handleDeleteClick(item)}
-            style={{ 
+            style={{
               color: '#d32f2f',
               border: '1px solid #d32f2f'
             }}
@@ -528,18 +581,18 @@ const ManageInventory: React.FC = () => {
   ];
 
   const transactionColumns = [
-    { 
-      header: 'Date', 
+    {
+      header: 'Date',
       key: 'date',
       render: (item: TransactionHistory) => formatDate(item.created_at)
     },
-    { 
-      header: 'Product Name', 
+    {
+      header: 'Product Name',
       key: 'product_name',
       render: (item: TransactionHistory) => item.product_name
     },
-    { 
-      header: 'Type', 
+    {
+      header: 'Type',
       key: 'type',
       render: (item: TransactionHistory) => {
         const typeInfo = getTransactionTypeDisplay(item.transaction_type);
@@ -550,11 +603,11 @@ const ManageInventory: React.FC = () => {
         );
       }
     },
-    { 
-      header: 'Quantity', 
+    {
+      header: 'Quantity',
       key: 'quantity',
       render: (item: TransactionHistory) => (
-        <div style={{ 
+        <div style={{
           color: item.transaction_type === 'in' ? '#2e7d32' : '#d32f2f',
           fontWeight: 'bold'
         }}>
@@ -562,15 +615,21 @@ const ManageInventory: React.FC = () => {
         </div>
       )
     },
-    { 
-      header: 'Previous Stock', 
+    {
+      header: 'Previous Stock',
       key: 'previous_stock',
       render: (item: TransactionHistory) => item.previous_stock
     },
-    { 
-      header: 'New Stock', 
+    {
+      header: 'New Stock',
       key: 'new_stock',
       render: (item: TransactionHistory) => item.new_stock
+    },
+    // ✅ Add reason column (no CSS/id changes)
+    {
+      header: 'Reason',
+      key: 'reason',
+      render: (item: TransactionHistory) => item.reason || '-'
     },
   ];
 
@@ -578,7 +637,7 @@ const ManageInventory: React.FC = () => {
     <div id="inventory-page" className="dashboard-layout-container">
       <div className="dashboard-main-content">
         <DashboardHeader title="Stock In - Out - Balance Tracker" />
-        
+
         <div className="dashboard-content-wrapper">
           <p className="section-subtitle">
             {/* Track stock movements and current balances for all salon products. */}
@@ -589,20 +648,20 @@ const ManageInventory: React.FC = () => {
               {successMessage}
             </div>
           )}
-          
+
           {loading && !isOpen && !isStockModalOpen && !isDeleteModalOpen && (
             <div className="dashboard-loading">
               <p>Loading...</p>
             </div>
           )}
-          
+
           {error && (
             <div className="dashboard-error">
               {error}
               <div className="dashboard-error-actions">
-                <Button 
-                  variant="text" 
-                  size="small" 
+                <Button
+                  variant="text"
+                  size="small"
                   onClick={fetchInventory}
                   style={{ fontSize: '14px' }}
                 >
@@ -629,20 +688,20 @@ const ManageInventory: React.FC = () => {
                   Stock In/Out History
                 </button>
               </div>
-              
+
               <div className="inventory-action-buttons">
-                <Button 
-                  variant="secondary" 
-                  onClick={fetchInventory} 
+                <Button
+                  variant="secondary"
+                  onClick={fetchInventory}
                   disabled={loading}
                   size="small"
                   style={{ marginRight: '8px' }}
                 >
                   Refresh
                 </Button>
-                <Button 
-                  variant="primary" 
-                  onClick={handleAddClick} 
+                <Button
+                  variant="primary"
+                  onClick={handleAddClick}
                   disabled={loading}
                   size="small"
                 >
@@ -656,9 +715,9 @@ const ManageInventory: React.FC = () => {
             <div className="inventory-content">
               <div className="inventory-table-container">
                 {products.length > 0 ? (
-                  <Table 
-                    data={products} 
-                    columns={inventoryColumns} 
+                  <Table
+                    data={products}
+                    columns={inventoryColumns}
                     emptyMessage="No products found. Add your first product to get started."
                   />
                 ) : (
@@ -677,9 +736,9 @@ const ManageInventory: React.FC = () => {
             <div className="inventory-content">
               <div className="transactions-table-container">
                 {transactions.length > 0 ? (
-                  <Table 
-                    data={transactions} 
-                    columns={transactionColumns} 
+                  <Table
+                    data={transactions}
+                    columns={transactionColumns}
                     emptyMessage="No stock transactions found."
                   />
                 ) : (
@@ -703,24 +762,24 @@ const ManageInventory: React.FC = () => {
         <form onSubmit={handleSubmit} className="contact-form">
           <div className="form-group">
             <label htmlFor="name">Product Name *</label>
-            <input 
-              type="text" 
-              id="name" 
-              name="name" 
-              value={formData.name} 
-              onChange={handleChange} 
+            <input
+              type="text"
+              id="name"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
               placeholder="e.g., Professional Shampoo"
-              required 
+              required
             />
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="category">Category *</label>
-            <select 
-              id="category" 
-              name="category" 
-              value={formData.category} 
-              onChange={handleChange} 
+            <select
+              id="category"
+              name="category"
+              value={formData.category}
+              onChange={handleChange}
               required
             >
               <option value="">Select Category</option>
@@ -733,11 +792,11 @@ const ManageInventory: React.FC = () => {
           <div className="form-group-row">
             <div className="form-group">
               <label htmlFor="unit">Unit *</label>
-              <select 
-                id="unit" 
-                name="unit" 
-                value={formData.unit} 
-                onChange={handleChange} 
+              <select
+                id="unit"
+                name="unit"
+                value={formData.unit}
+                onChange={handleChange}
                 required
               >
                 {productUnits.map(unit => (
@@ -745,36 +804,36 @@ const ManageInventory: React.FC = () => {
                 ))}
               </select>
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="low_stock_alert">Low Stock Alert *</label>
-              <input 
-                type="number" 
-                id="low_stock_alert" 
-                name="low_stock_alert" 
-                value={formData.low_stock_alert} 
-                onChange={handleChange} 
-                required 
-                min="1" 
+              <input
+                type="number"
+                id="low_stock_alert"
+                name="low_stock_alert"
+                value={formData.low_stock_alert}
+                onChange={handleChange}
+                required
+                min="1"
               />
             </div>
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="stock">Initial Stock Quantity *</label>
-            <input 
-              type="number" 
-              id="stock" 
-              name="stock" 
-              value={formData.stock} 
-              onChange={handleChange} 
-              required 
-              min="0" 
+            <input
+              type="number"
+              id="stock"
+              name="stock"
+              value={formData.stock}
+              onChange={handleChange}
+              required
+              min="0"
             />
           </div>
 
           {error && <p className="auth-error-message">{error}</p>}
-          
+
           <div className="modal-actions">
             <Button variant="secondary" onClick={closeModal} disabled={loading}>
               Cancel
@@ -791,24 +850,56 @@ const ManageInventory: React.FC = () => {
         <form onSubmit={handleStockSubmit} className="contact-form">
           <div className="form-group">
             <label htmlFor="quantity">Quantity *</label>
-            <input 
-              type="number" 
-              id="quantity" 
-              name="quantity" 
-              value={stockFormData.quantity} 
-              onChange={handleStockFormChange} 
-              required 
-              min="1" 
+            <input
+              type="number"
+              id="quantity"
+              name="quantity"
+              value={stockFormData.quantity}
+              onChange={handleStockFormChange}
+              required
+              min="1"
               step="1"
             />
             <small>Unit: {selectedProduct?.unit}</small>
           </div>
 
+          {/* ✅ Reason dropdown (IDs and classes preserved) */}
+          <div className="form-group">
+            <label htmlFor="reason_option">Reason *</label>
+            <select
+              id="reason_option"
+              name="reason_option"
+              value={stockFormData.reason_option}
+              onChange={handleStockFormChange}
+              required
+            >
+              {(stockFormData.type === 'in' ? stockInReasons : stockOutReasons).map(r => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* ✅ Other reason input */}
+          {stockFormData.reason_option === 'Other' && (
+            <div className="form-group">
+              <label htmlFor="reason_other">Specify reason *</label>
+              <input
+                type="text"
+                id="reason_other"
+                name="reason_other"
+                value={stockFormData.reason_other}
+                onChange={handleStockFormChange}
+                placeholder="Type the reason..."
+                required
+              />
+            </div>
+          )}
+
           {selectedProduct && (
             <div className="stock-info-box">
               <p><strong>Current Stock:</strong> {selectedProduct.stock} {selectedProduct.unit}{selectedProduct.stock !== 1 ? 's' : ''}</p>
               <p><strong>After {getStockActionLabel(stockFormData.type).toLowerCase()}:</strong> {
-                stockFormData.type === 'in' 
+                stockFormData.type === 'in'
                   ? selectedProduct.stock + stockFormData.quantity
                   : selectedProduct.stock - stockFormData.quantity
               } {selectedProduct.unit}</p>
@@ -816,16 +907,16 @@ const ManageInventory: React.FC = () => {
           )}
 
           {error && <p className="auth-error-message">{error}</p>}
-          
+
           <div className="modal-actions">
             <Button variant="secondary" onClick={closeStockModal} disabled={loading}>
               Cancel
             </Button>
-            <Button 
-              type="submit" 
-              variant="primary" 
+            <Button
+              type="submit"
+              variant="primary"
               disabled={loading}
-              style={{ 
+              style={{
                 backgroundColor: getStockActionColor(stockFormData.type),
                 borderColor: getStockActionColor(stockFormData.type)
               }}
@@ -845,18 +936,18 @@ const ManageInventory: React.FC = () => {
           <p className="delete-confirm-subtext">
             This action cannot be undone. All stock transactions for this product will also be deleted.
           </p>
-          
+
           {error && <p className="auth-error-message">{error}</p>}
-          
+
           <div className="modal-actions">
             <Button variant="secondary" onClick={closeDeleteModal} disabled={loading}>
               Cancel
             </Button>
-            <Button 
-              variant="primary" 
-              onClick={confirmDelete} 
+            <Button
+              variant="primary"
+              onClick={confirmDelete}
               disabled={loading}
-              style={{ 
+              style={{
                 backgroundColor: '#d32f2f',
                 borderColor: '#d32f2f'
               }}
