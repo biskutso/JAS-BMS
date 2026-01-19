@@ -177,7 +177,7 @@ const ViewServices: React.FC = () => {
               </div>
 
               {/* Search */}
-              <div className="filter-group filter-group--search">
+              {/* <div className="filter-group filter-group--search">
                 <h4 className="filter-group-title">Search</h4>
                 <div className="search-box">
                   <input
@@ -188,7 +188,7 @@ const ViewServices: React.FC = () => {
                   />
                   <span className="search-icon">🔍</span>
                 </div>
-              </div>
+              </div> */}
 
               {/* Sort */}
               <div className="filter-group filter-group--sort">
