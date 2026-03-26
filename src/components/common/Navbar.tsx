@@ -31,8 +31,8 @@ const Navbar: React.FC = () => {
   };
 
   const handleDashboardClick = () => {
-    navigate(getDashboardRoute());
     closeMobileMenu();
+    window.location.href = getDashboardRoute();
   };
 
   // ✅ Open confirmation modal instead of logging out immediately
@@ -93,14 +93,14 @@ const Navbar: React.FC = () => {
               <Button
                 variant="secondary"
                 size="small"
-                onClick={() => { navigate('/login'); closeMobileMenu(); }}
+                onClick={() => { closeMobileMenu(); window.location.href = '/login';}}
               >
                 Login
               </Button>
               <Button
                 variant="primary"
                 size="small"
-                onClick={() => { navigate('/signup'); closeMobileMenu(); }}
+                onClick={() => {closeMobileMenu(); window.location.href = '/signup';}}
               >
                 Sign Up
               </Button>
@@ -163,14 +163,14 @@ const Navbar: React.FC = () => {
                 <Button
                   variant="primary"
                   size="small"
-                  onClick={() => { navigate('/login'); closeMobileMenu(); }}
+                  onClick={() => { closeMobileMenu(); window.location.href = '/login';}}
                 >
                   Login
                 </Button>
                 <Button
                   variant="primary"
                   size="small"
-                  onClick={() => { navigate('/signup'); closeMobileMenu(); }}
+                  onClick={() => {closeMobileMenu(); window.location.href = '/signup';}}
                 >
                   Sign Up
                 </Button>

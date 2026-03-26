@@ -1,7 +1,15 @@
 import React, { useEffect } from 'react';
-import { Routes, Route, Navigate, Outlet, Link, useLocation } from 'react-router-dom';
+import {
+  Routes,
+  Route,
+  Navigate,
+  Outlet,
+  Link,
+  useLocation,
+} from 'react-router-dom';
 import { useAuth } from '@context/AuthContext';
 import { UserRole } from '@models/user';
+import BotpressChat from '@components/common/BotpressChat';
 
 // Public Pages
 import Home from '@pages/public/Home';
@@ -36,16 +44,16 @@ import ManageBookings from '@pages/admin/ManageBookings';
 import ActivityLogs from '@pages/admin/ActivityLogs';
 import GenerateReports from '@pages/admin/GenerateReports';
 
-// 404 Fallback
 const NotFound: React.FC = () => (
   <div className="page-container text-center py-24">
     <h1 className="text-3xl font-bold mb-2">404 - Page Not Found</h1>
     <p className="mb-4">The page you are looking for does not exist.</p>
-    <Link to="/" className="text-blue-600 hover:underline">Go to Home</Link>
+    <Link to="/" className="text-blue-600 hover:underline">
+      Go to Home
+    </Link>
   </div>
 );
 
-// ✅ Protected Route Component
 interface ProtectedRouteProps {
   allowedRoles: UserRole[];
 }
@@ -62,14 +70,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
   }
 
   if (!isAuthenticated) {
-    console.log('Not authenticated, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
   if (user && !allowedRoles.includes(user.role as UserRole)) {
-    console.log(`User role ${user.role} not in allowed roles:`, allowedRoles);
-    
-    // Redirect based on user's actual role
     switch (user.role) {
       case 'admin':
         return <Navigate to="/admin/dashboard" replace />;
@@ -83,32 +87,32 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
   return <Outlet />;
 };
 
-// ✅ Scroll to top on route change
 const ScrollToTop: React.FC = () => {
   const { pathname } = useLocation();
-  useEffect(() => window.scrollTo(0, 0), [pathname]);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
   return null;
 };
 
-// ✅ Main Router
 const AppRouter: React.FC = () => {
   return (
     <>
       <ScrollToTop />
+      <BotpressChat />
 
       <Routes>
-        {/* 🔓 Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/services" element={<Services />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/login" element={<LoginSignup />} />
         <Route path="/signup" element={<LoginSignup />} />
 
-        {/* 👤 Customer Routes */}
         <Route element={<ProtectedRoute allowedRoles={['customer', 'admin']} />}>
           <Route path="/customer" element={<DashboardLayout />}>
             <Route index element={<CustomerDashboard />} />
-            {/* <Route path="dashboard" element={<CustomerDashboard />} /> */}
             <Route path="services" element={<ViewServicesCustomer />} />
             <Route path="book" element={<BookAppointment />} />
             <Route path="manage-bookings" element={<CancelReschedule />} />
@@ -117,7 +121,6 @@ const AppRouter: React.FC = () => {
           </Route>
         </Route>
 
-        {/* 🧰 Staff Routes */}
         <Route element={<ProtectedRoute allowedRoles={['staff', 'admin']} />}>
           <Route path="/staff" element={<DashboardLayout />}>
             <Route index element={<StaffDashboard />} />
@@ -129,7 +132,6 @@ const AppRouter: React.FC = () => {
           </Route>
         </Route>
 
-        {/* 👑 Admin Routes */}
         <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
           <Route path="/admin" element={<DashboardLayout />}>
             <Route index element={<AdminDashboard />} />
@@ -145,7 +147,6 @@ const AppRouter: React.FC = () => {
           </Route>
         </Route>
 
-        {/* ❌ 404 Page */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </>
