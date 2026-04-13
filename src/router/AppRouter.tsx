@@ -10,6 +10,7 @@ import {
 import { useAuth } from '@context/AuthContext';
 import { UserRole } from '@models/user';
 import BotpressChat from '@components/common/BotpressChat';
+import TawkChat from '@components/common/TawkChat';
 
 // Public Pages
 import Home from '@pages/public/Home';
@@ -102,6 +103,7 @@ const AppRouter: React.FC = () => {
     <>
       <ScrollToTop />
       <BotpressChat />
+      <TawkChat />
 
       <Routes>
         <Route path="/" element={<Home />} />

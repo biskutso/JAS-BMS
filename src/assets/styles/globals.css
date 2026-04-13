@@ -184,6 +184,17 @@ p {
   position: relative;
 }
 
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrapper input {
+  width: 100%;
+  padding-right: 70px;
+} 
+
 .password-toggle-btn {
   position: absolute;
   right: 10px;
@@ -202,4 +213,26 @@ p {
 
 .password-input {
   padding-right: 40px !important;
+}
+
+body.tawk-handoff-active #bp-web-widget-container,
+body.tawk-handoff-active #botpress-webchat,
+body.tawk-handoff-active iframe[src*="botpress"],
+body.tawk-handoff-active iframe[title*="botpress"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.hide-botpress #bp-web-widget-container,
+.hide-botpress #botpress-webchat,
+.hide-botpress iframe[src*="botpress"],
+.hide-botpress iframe[title*="botpress"],
+.hide-botpress [class*="bpWebchat"],
+.hide-botpress [class*="botpress"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }

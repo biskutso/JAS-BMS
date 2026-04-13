@@ -4,12 +4,12 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import Button from '@components/common/Button';
 import { useAuth } from '@context/AuthContext';
 import { supabase } from '../../supabaseClient';
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 
 // await supabase.rpc("log_auth_activity", { p_action: "login" });
 
 // await supabase.rpc("log_auth_activity", { p_action: "logout" });
 // await supabase.auth.signOut();
-
 
 const LoginSignup: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -17,6 +17,7 @@ const LoginSignup: React.FC = () => {
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
@@ -25,18 +26,35 @@ const LoginSignup: React.FC = () => {
   const location = useLocation();
   const { login, signup, user, isAuthenticated } = useAuth();
 
+  const clearForm = () => {
+    setEmail('');
+    setPassword('');
+    setFirstName('');
+    setLastName('');
+    setError(null);
+    setLoading(false);
+    setRedirecting(false);
+    setShowPassword(false);
+  };
+
   // Switch between login/signup based on URL
   useEffect(() => {
     if (location.pathname === '/login') setIsLogin(true);
     else if (location.pathname === '/signup') setIsLogin(false);
+
+    // Clear all fields whenever page changes
+    clearForm();
+
+    // Force page refresh when switching routes
+    window.scrollTo(0, 0);
   }, [location.pathname]);
 
   // Handle successful authentication and redirect
   useEffect(() => {
     if (isAuthenticated && user && redirecting) {
       const role = user.role || 'customer';
-      console.log('Redirecting user with role:', role); // Debug log
-      
+      console.log('Redirecting user with role:', role);
+
       switch (role) {
         case 'admin':
           navigate('/admin/dashboard');
@@ -78,7 +96,10 @@ const LoginSignup: React.FC = () => {
     }
   };
 
-  const handleFormToggle = () => navigate(isLogin ? '/signup' : '/login');
+  const handleFormToggle = () => {
+    clearForm();
+    navigate(isLogin ? '/signup' : '/login');
+  };
 
   return (
     <div className="auth-container">
@@ -111,13 +132,25 @@ const LoginSignup: React.FC = () => {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+
+          <div className="password-input-wrapper">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="password-input"
+            />
+
+            <button
+              type="button"
+              className="password-toggle-btn"
+              onClick={() => setShowPassword((prev) => !prev)}
+            >
+              {showPassword ? <FaEyeSlash /> : <FaEye />}
+            </button>
+          </div>
 
           {error && <p className="auth-error-message">{error}</p>}
 
