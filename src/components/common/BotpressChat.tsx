@@ -11,7 +11,7 @@ const BOTPRESS_BOT_SRC =
 const HANDOFF_DELAY_MS = 700
 const RETURN_DELAY_MS = 700
 
-const BOTPRESS_INLINE_STYLES = `
+const BOTPRESS_BASE_STYLES = `
   button[aria-label*="voice"],
   button[aria-label*="Voice"],
   button[aria-label*="microphone"],
@@ -21,6 +21,34 @@ const BOTPRESS_INLINE_STYLES = `
     display: none !important;
   }
 `
+
+const BOTPRESS_HIDE_FAB_CSS = `
+  /* Hide the Webchat floating button */ 
+  .bpFab { 
+    display: none; 
+  }
+
+  /* Hide the new‑message badge / notification indicator */ 
+  .bpNotificationContainer { 
+    display: none; 
+  } 
+
+`
+
+const applyBotpressStyles = (hideFab = false) => {
+  if (!window.botpress?.config) return false
+
+  window.botpress.config({
+    configuration: {
+      additionalStylesheet: `
+        ${BOTPRESS_BASE_STYLES}
+        ${hideFab ? BOTPRESS_HIDE_FAB_CSS : ''}
+      `,
+    },
+  })
+
+  return true
+}
 
 const appendScript = (id: string, src: string, defer = false) => {
   if (document.getElementById(id)) return
@@ -63,43 +91,19 @@ const unloadBotpress = () => {
 }
 
 const closeBotpressWidget = () => {
+  applyBotpressStyles(true)
+
   if (window.botpress?.close) {
     window.botpress.close()
-    return
   }
-
-  const selectors = [
-    '#bp-web-widget-container',
-    '#botpress-webchat',
-    'iframe[src*="botpress"]',
-    'iframe[title*="botpress"]',
-  ]
-
-  selectors.forEach((selector) => {
-    document.querySelectorAll<HTMLElement>(selector).forEach((el) => {
-      el.style.display = 'none'
-    })
-  })
 }
 
 const openBotpressWidget = () => {
+  applyBotpressStyles(false)
+
   if (window.botpress?.open) {
     window.botpress.open()
-    return
   }
-
-  const selectors = [
-    '#bp-web-widget-container',
-    '#botpress-webchat',
-    'iframe[src*="botpress"]',
-    'iframe[title*="botpress"]',
-  ]
-
-  selectors.forEach((selector) => {
-    document.querySelectorAll<HTMLElement>(selector).forEach((el) => {
-      el.style.display = ''
-    })
-  })
 }
 
 const BotpressChat = () => {
@@ -153,19 +157,6 @@ const BotpressChat = () => {
     let attempts = 0
     const maxAttempts = 40
 
-    const applyBotpressConfig = () => {
-      if (!window.botpress?.config || configAppliedRef.current) return false
-
-      window.botpress.config({
-        configuration: {
-          additionalStylesheet: BOTPRESS_INLINE_STYLES,
-        },
-      })
-
-      configAppliedRef.current = true
-      return true
-    }
-
     const openTawkAfterDelay = (payload: any, retries = 20) => {
       if (!isAllowedPage) return
 
@@ -213,14 +204,17 @@ const BotpressChat = () => {
       if (botpressListenerBound.current) return
       botpressListenerBound.current = true
 
-      applyBotpressConfig()
+      if (!configAppliedRef.current) {
+        applyBotpressStyles(false)
+        configAppliedRef.current = true
+      }
 
       window.botpress.on('webchat:ready', () => {
-        applyBotpressConfig()
+        applyBotpressStyles(handoffActive.current)
       })
 
       window.botpress.on('webchat:opened', () => {
-        applyBotpressConfig()
+        applyBotpressStyles(handoffActive.current)
       })
 
       window.botpress.on('customEvent', (event: any) => {
